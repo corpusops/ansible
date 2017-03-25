@@ -90,7 +90,7 @@ class GalaxyAPI(object):
         try:
             display.vvv(url)
             resp = open_url(url, data=args, validate_certs=self._validate_certs, headers=headers, method=method,
-                            timeout=20)
+                            timeout=120)
             data = json.loads(to_text(resp.read(), errors='surrogate_or_strict'))
         except HTTPError as e:
             res = json.loads(to_text(e.fp.read(), errors='surrogate_or_strict'))
