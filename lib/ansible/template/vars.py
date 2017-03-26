@@ -19,6 +19,8 @@
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
+import traceback
+
 from ansible.compat.six import iteritems
 from jinja2.utils import missing
 from ansible.module_utils._text import to_native
@@ -92,7 +94,12 @@ class AnsibleJ2Vars:
             try:
                 value = self._templar.template(variable)
             except Exception as e:
-                raise type(e)(to_native(variable) + ': ' + e.message)
+                trace = traceback.format_exc()
+                try:
+                    msg = to_native(variable) + ': ' + e.message + '\n' + trace
+                except Exception, e2:
+                    msg = to_native(variable) + ': ' + e.message
+                raise type(e)(msg)
             return value
 
     def add_locals(self, locals):
