@@ -21,7 +21,6 @@ __metaclass__ = type
 
 import fnmatch
 import os
-import subprocess
 import sys
 import re
 import itertools
@@ -159,16 +158,38 @@ class Inventory(object):
 
         self._vars_plugins = [ x for x in vars_loader.all(self) ]
 
+        ### POST PROCESS groups and hosts after specific parser was invoked
+
+        hosts = []
+        group_names = set()
         # set group vars from group_vars/ files and vars plugins
         for g in self.groups:
             group = self.groups[g]
             group.vars = combine_vars(group.vars, self.get_group_variables(group.name))
             self.get_group_vars(group)
+            group_names.add(group.name)
+            hosts.extend(group.get_hosts())
 
         # get host vars from host_vars/ files and vars plugins
-        for host in self.get_hosts(ignore_limits=True, ignore_restrictions=True):
+        for host in hosts:
             host.vars = combine_vars(host.vars, self.get_host_variables(host.name))
             self.get_host_vars(host)
+
+            mygroups = host.get_groups()
+
+            # ensure hosts are always in 'all'
+            if all not in mygroups:
+                all.add_host(host)
+
+            if ungrouped in mygroups:
+                # clear ungrouped of any incorrectly stored by parser
+                if set(mygroups).difference(set([all, ungrouped])):
+                    host.remove_group(ungrouped)
+            else:
+                # add ungrouped hosts to ungrouped
+                length = len(mygroups)
+                if length == 0 or (length == 1 and all in mygroups):
+                    ungrouped.add_host(host)
 
     def _match(self, str, pattern_str):
         try:
