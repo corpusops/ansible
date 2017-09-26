@@ -1,12 +1,12 @@
 Ansible Changes By Release
 ==========================
 
-## 2.3.2 "Ramble On" - 2017-08-04
 <a id="2.3.3"></a>
 
 ## 2.3.3 "Ramble On" - TBD
 
 ### Bugfixes
+* Fix alternatives module handlling of non existing options
 * Fix synchronize traceback with the docker connection plugin
 * Do not escape backslashes in the template lookup plugin to mirror what the template module does
 * Fix the expires option of the postgresq_user module
@@ -19,6 +19,11 @@ Ansible Changes By Release
   * docker_login module
   * Workaround python-libselinux API change in the seboolean module
   * digital_ocean_tag module
+  * Fix the zip filter
+  * Fix user module combining bytes and text
+  * Fix for security groups in the amazon efs module
+  * Fix for the jail connection plugin not finding the named jail
+  * Fix for blockinfile's parameters insertbefore and insertafter
 * ios_config: Fix traceback when the efaults parameter is not set
 * iosxr_config: Fixed unicode error when UTF-8 characters are in configs
 * Fix check mode in archive module
@@ -30,10 +35,26 @@ Ansible Changes By Release
 * Fix yum module failing with a URL to an rpm
 * Fix file module inappropriately expanding literal dollar signs in a path read
   from the filesystem as an environment variable.
+* Fix the ssh "smart" transport setting which automatically selects the best means of
+  transferring files over ssh (sftp, ssh, piped).
+* Fix authentication by api_key parameter in exoscale modules.
+* vmware module_utils shared code ssl/validate_certs fixes in connection logic
+* allow 'bridge' facts to work for certain containers that create conflicting ones with connection plugins
+* Fix for win_get_url to use TLS 1.2/1.1 if it is available on the host
+* Fix for the filetree lookup with non-ascii group names
+* Better message for invalid keywords/options in task due to undefined expressions
+* Fixed check mode for enable on Solaris for service module
+* Fix cloudtrail module to allow AWS profiles other than the default
+* Fix an encoding issue with secret (password) vars_prompts
+* Fix for Windows become to show the stdout and stderr strings on a failure 
+* Fix the issue SSL verification can not be disabled for Tower modules
+* Use safe_load instead on load to read a yaml document
+* Fix for win_file to respect check mode when deleting directories
+
 
 <a id="2.3.2"></a>
 
-## 2.3.2 "Ramble On" - TBD
+## 2.3.2 "Ramble On" - 2017-08-04
 
 ### Bugfixes
 * Fix partend i18n issues
