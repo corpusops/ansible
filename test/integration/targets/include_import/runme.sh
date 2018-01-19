@@ -83,3 +83,8 @@ test "$(grep -c '"item=foo"' test_include_dupe_loop.out)" = 3
 ansible-playbook public_exposure/playbook.yml -i inventory "$@"
 ansible-playbook public_exposure/no_bleeding.yml -i inventory "$@"
 ansible-playbook public_exposure/no_overwrite_roles.yml -i inventory "$@"
+
+## Include role honour allow duplicates
+# https://github.com/ansible/ansible/pull/35164
+ANSIBLE_STRATEGY='linear' ansible-playbook playbook/honour_duplicates.yml -i inventory "$@"
+ANSIBLE_STRATEGY='free' ansible-playbook playbook/honour_duplicates.yml -i inventory "$@"
