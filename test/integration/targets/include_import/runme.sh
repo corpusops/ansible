@@ -114,3 +114,8 @@ test "$(grep -c 'ok=3' test_allow_single_role_dup.out)" = 1
 
 # https://github.com/ansible/ansible/issues/66764
 ANSIBLE_HOST_PATTERN_MISMATCH=error ansible-playbook empty_group_warning/playbook.yml
+
+## Include role honour allow duplicates
+# https://github.com/ansible/ansible/pull/35164
+ANSIBLE_STRATEGY='linear' ansible-playbook playbook/honour_duplicates.yml -i inventory "$@"
+ANSIBLE_STRATEGY='free' ansible-playbook playbook/honour_duplicates.yml -i inventory "$@"
