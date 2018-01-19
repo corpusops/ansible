@@ -329,8 +329,8 @@ def load_list_of_tasks(ds, play, block=None, role=None, task_include=None, use_h
                         ir._role_name = templar.template(ir._role_name)
 
                     # uses compiled list from object
-                    blocks, _ = ir.get_block_list(variable_manager=variable_manager, loader=loader)
-                    t = task_list.extend(blocks)
+                    blocks, _ = ir.get_block_list(play, variable_manager=variable_manager, loader=loader)
+                    task_list.extend(blocks)
                 else:
                     # passes task object itself for latter generation of list
                     t = task_list.append(ir)
