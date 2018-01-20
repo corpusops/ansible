@@ -94,3 +94,8 @@ test "$(egrep -c 'include handler task|ERROR! The requested handler '"'"'do_impo
 # https://github.com/ansible/ansible/issues/49969
 ansible-playbook -v parent_templating/playbook.yml 2>&1 | tee test_parent_templating.out
 test "$(egrep -c 'Templating the path of the parent include_tasks failed.' test_parent_templating.out)" = 0
+
+## Include roles with tags in meta/main.yml make a role run more than neccesary
+# https://github.com/ansible/ansible/pull/35166
+ANSIBLE_STRATEGY='linear' ansible-playbook playbook/cached_role.yml -i inventory -v "$@"
+ANSIBLE_STRATEGY='free' ansible-playbook playbook/cached_role.yml -i inventory -v "$@"
