@@ -114,3 +114,8 @@ test "$(grep -c 'ok=3' test_allow_single_role_dup.out)" = 1
 
 # https://github.com/ansible/ansible/issues/66764
 ANSIBLE_HOST_PATTERN_MISMATCH=error ansible-playbook empty_group_warning/playbook.yml
+
+## Include roles with tags in meta/main.yml make a role run more than neccesary
+# https://github.com/ansible/ansible/pull/35166
+ANSIBLE_STRATEGY='linear' ansible-playbook playbook/cached_role.yml -i inventory -v "$@"
+ANSIBLE_STRATEGY='free' ansible-playbook playbook/cached_role.yml -i inventory -v "$@"
