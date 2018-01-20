@@ -184,7 +184,6 @@ class IncludeRole(TaskInclude):
         new_me._role = self._role
         new_me.private = self.private
         new_me._play = self._play
-        new_me._role = self._role
 
         return new_me
 
