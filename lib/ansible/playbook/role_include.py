@@ -73,8 +73,10 @@ class IncludeRole(TaskInclude):
             myplay = self._parent._play
         else:
             myplay = play
-        variable_manager = self.get_variable_manager()
-        loader = variable_manager._loader
+        if variable_manager is None or loader is None:
+            variable_manager = self.get_variable_manager()
+        if loader is None:
+            loader = variable_manager._loader
 
         ri = RoleInclude.load(self._role_name, play=myplay, variable_manager=variable_manager, loader=loader)
         ri.vars.update(self.vars)
@@ -183,10 +185,6 @@ class IncludeRole(TaskInclude):
         new_me.private = self.private
         new_me._play = self._play
         new_me._role = self._role
-
-        new_me._play = self._play
-        new_me._role = self._role
-        new_me.private = self.private
 
         return new_me
 
