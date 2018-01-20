@@ -108,3 +108,8 @@ ansible-playbook valid_include_keywords/playbook.yml "$@"
 # https://github.com/ansible/ansible/issues/64902
 ansible-playbook tasks/test_allow_single_role_dup.yml 2>&1 | tee test_allow_single_role_dup.out
 test "$(grep -c 'ok=3' test_allow_single_role_dup.out)" = 1
+
+## Include roles with tags in meta/main.yml make a role run more than neccesary
+# https://github.com/ansible/ansible/pull/35166
+ANSIBLE_STRATEGY='linear' ansible-playbook playbook/cached_role.yml -i inventory -v "$@"
+ANSIBLE_STRATEGY='free' ansible-playbook playbook/cached_role.yml -i inventory -v "$@"
