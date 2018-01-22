@@ -9,7 +9,9 @@
     - [Include role: serialization: (de)pickling support](https://github.com/ansible/ansible/pull/35134)
 
 ## Reverted commits
-- [0b7d78d67f962a2605c84a39fb3c8ef449701264](https://github.com/ansible/ansible/commit/0b7d78d67f962a2605c84a39fb3c8ef449701264)
-
+- [Don't use getattr inget_parent_attribute to avoid recursion issues](https://github.com/ansible/ansible/commit/0b7d78d67f962a2605c84a39fb3c8ef449701264)
+    - [included include_role fails to escalate since ebf971f](https://github.com/ansible/ansible/issues/35065)
+    - ask kiorky: irclog chat with sivel:  ven. janv. 19 2018 18:24:56
+    - only workaround is to define a var in parent and then use it in children roles (like with a wrapping block)...
 ## abandoned changes
 - no more diff in time for recent ansible code: [include_role optimizations](https://github.com/ansible/ansible/commit/bf9fb2bc503da692be788eabdd0c7746ae7318d1)
