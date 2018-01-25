@@ -1,2 +1,2 @@
 posix/ci/group3
-include_role
+import_include
