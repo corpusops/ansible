@@ -338,7 +338,7 @@ class StrategyModule(StrategyBase):
                                     new_ir._role.has_run(host) and
                                     (new_ir._role._metadata is None or (new_ir._role._metadata and not new_ir._role._metadata.allow_duplicates))
                                 ):
-                                    display.debug("'%s' skipped because role has already run" % new_ir)
+                                    display.debug("ir: '%s' skipped because role has already run" % new_ir)
                                     new_blocks, handler_blocks = [], []
                                 self._tqm.update_handler_list([handler for handler_block in handler_blocks for handler in handler_block.block])
                             else:

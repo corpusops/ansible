@@ -79,7 +79,9 @@ class IncludeRole(TaskInclude):
             loader = variable_manager._loader
 
         ri = RoleInclude.load(self._role_name, play=myplay, variable_manager=variable_manager, loader=loader)
-        ri.vars.update(self.vars)
+        rvars = {}
+        rvars.update(self.strip_vars(self.vars))
+        ri.vars.update(rvars)
 
         # build role
         if self.vars:
@@ -198,13 +200,24 @@ class IncludeRole(TaskInclude):
             dep_chain = self.get_dep_chain()
         return self._role.get_default_vars(dep_chain=dep_chain)
 
+    def strip_vars(self, all_vars):
+        # Remove the args configuring the role itself from arguments
+        stripped_args = frozenset(self.args.keys()).intersection(self.VALID_ARGS)
+        for k in stripped_args:
+            try:
+                del all_vars[k]
+            except KeyError:
+                pass
+        return all_vars
+
     def get_vars(self, include_params=True):
-        ret = TaskInclude.get_vars(self, include_params=include_params)
+        all_vars = TaskInclude.get_vars(self, include_params=include_params)
         if self.is_loaded:  # not yet loaded skip
-            ret.update(
+            all_vars.update(
                 self._role.get_vars(include_params=include_params)
             )
-        return ret
+        all_vars = self.strip_vars(all_vars)
+        return all_vars
 
     def get_include_params(self):
         v = super(IncludeRole, self).get_include_params()
