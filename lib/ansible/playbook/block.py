@@ -299,7 +299,10 @@ class Block(Base, Become, Conditional, Taggable):
             if self._parent and (value is None or extend):
                 try:
                     if attr != 'when' or getattr(self._parent, 'statically_loaded', True):
-                        parent_value = getattr(self._parent, attr, None)
+                        if hasattr(self._parent, '_get_parent_attribute'):
+                            parent_value = self._parent._get_parent_attribute(attr)
+                        else:
+                            parent_value = self._parent._attributes.get(attr, None)
                         if extend:
                             value = self._extend_value(value, parent_value, prepend)
                         else:
