@@ -12,7 +12,9 @@
 
 
 ## Reverted commits
-- [Don't use getattr inget_parent_attribute to avoid recursion issues](https://github.com/ansible/ansible/commit/0b7d78d67f962a2605c84a39fb3c8ef449701264)
+- **REALLY TO BE CAREFUL FOR 2.5 AS IT WILL NOT BE REVERTED ON THAT BRANCH !!!**<br/>
+  Upstream reverted it too in [#35247](https://github.com/ansible/ansible/pull/35247) <br/>
+  [Don't use getattr inget_parent_attribute to avoid recursion issues](https://github.com/ansible/ansible/commit/0b7d78d67f962a2605c84a39fb3c8ef449701264)
     - [included include_role fails to escalate since ebf971f](https://github.com/ansible/ansible/issues/35065)
     - ask kiorky: irclog chat with sivel:  ven. janv. 19 2018 18:24:56
     - only workaround is to define a var in parent and then use it in children roles (like with a wrapping block)...
