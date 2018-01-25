@@ -193,6 +193,12 @@ class IncludeRole(TaskInclude):
     def is_loaded(self):
         return self._role is not None
 
+    def get_include_params(self):
+        v = super(IncludeRole, self).get_include_params()
+        if self._parent_role:
+            v.update(self._parent_role.get_role_params())
+        return v
+
     def get_default_vars(self, dep_chain=None):
         if not self.is_loaded:
             return dict()
@@ -218,12 +224,6 @@ class IncludeRole(TaskInclude):
             )
         all_vars = self.strip_vars(all_vars)
         return all_vars
-
-    def get_include_params(self):
-        v = super(IncludeRole, self).get_include_params()
-        if self._parent_role:
-            v.update(self._parent_role.get_role_params())
-        return v
 
     def serialize(self, no_play=False):
         data = super(IncludeRole, self).serialize()
