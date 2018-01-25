@@ -74,7 +74,7 @@ class IncludeRole(TaskInclude):
             myplay = play
 
         ri = RoleInclude.load(self._role_name, play=myplay, variable_manager=variable_manager, loader=loader, collection_list=self.collections)
-        ri.vars.update(self.vars)
+        ri.vars.update(self.strip_vars(self.vars))
 
         # build role
         actual_role = Role.load(ri, myplay, parent_role=self._parent_role, from_files=self._from_files,
@@ -169,3 +169,18 @@ class IncludeRole(TaskInclude):
             v.setdefault('ansible_parent_role_names', []).insert(0, self._parent_role.get_name())
             v.setdefault('ansible_parent_role_paths', []).insert(0, self._parent_role._role_path)
         return v
+
+    def strip_vars(self, all_vars):
+        # Remove the args configuring the role itself from arguments
+        stripped_args = frozenset(self.args.keys()).intersection(self.VALID_ARGS)
+        for k in stripped_args:
+            try:
+                del all_vars[k]
+            except KeyError:
+                pass
+        return all_vars
+
+    def get_vars(self):
+        all_vars = super(IncludeRole, self).get_vars()
+        all_vars = self.strip_vars(all_vars)
+        return all_vars
