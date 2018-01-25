@@ -9,7 +9,7 @@
         - [FIX: multiple nested tasks include levels](https://github.com/ansible/ansible/pull/35107)
         - [include role honour allow duplicates](https://github.com/ansible/ansible/pull/35132)
         - [Include role: serialization: (de)pickling support](https://github.com/ansible/ansible/pull/35134)
-    
+
 
 ## Reverted commits
 - [Don't use getattr inget_parent_attribute to avoid recursion issues](https://github.com/ansible/ansible/commit/0b7d78d67f962a2605c84a39fb3c8ef449701264)

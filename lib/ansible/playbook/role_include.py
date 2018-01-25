@@ -52,7 +52,7 @@ class IncludeRole(TaskInclude):
     # ATTRIBUTES
 
     # private as this is a 'module options' vs a task property
-    _allow_duplicates = FieldAttribute(isa='bool', default=None, private=True)
+    _allow_duplicates = FieldAttribute(isa='bool', default=True, private=True)
     _private = FieldAttribute(isa='bool', default=None, private=True)
 
     def __init__(self, block=None, role=None, task_include=None):
