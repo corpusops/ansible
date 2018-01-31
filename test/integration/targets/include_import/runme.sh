@@ -1,4 +1,4 @@
-G!/usr/bin/env bash
+#!/usr/bin/env bash
 
 set -eux
 
@@ -48,3 +48,9 @@ ANSIBLE_STRATEGY='free' ansible-playbook -i ../../inventory playbook/sharedvars.
 # https://github.com/ansible/ansible/issues/34782
 ANSIBLE_STRATEGY='linear' ansible-playbook nested.yml  -i ../../inventory "$@" --skip-tags never
 ANSIBLE_STRATEGY='free' ansible-playbook nested.yml  -i ../../inventory "$@" --skip-tags never
+
+
+## Include role honour allow duplicates
+# https://github.com/ansible/ansible/pull/35164
+ANSIBLE_STRATEGY='linear' ansible-playbook playbook/honour_duplicates.yml -i ../../inventory "$@" --skip-tags never
+ANSIBLE_STRATEGY='free' ansible-playbook playbook/honour_duplicates.yml -i ../../inventory "$@" --skip-tags never
