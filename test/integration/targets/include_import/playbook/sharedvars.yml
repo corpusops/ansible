@@ -6,7 +6,7 @@
     - assert:
         that:
           - test2.stdout == 'notdefined'
-    - include_role: {name: test_include_role}
+    - include_role: {name: sharedvars_include_role}
       register: testa
     - shell: echo {{testinc_defvar1}}
       register: test2
@@ -31,7 +31,7 @@
 - name: verify that we can play with default vars
   hosts: testhost
   tasks:
-    - include_role: {name: test_include_role}
+    - include_role: {name: sharedvars_include_role}
       vars:
         testinc_defvar1: overriden
     - shell: echo {{testinc_defvar1}}
