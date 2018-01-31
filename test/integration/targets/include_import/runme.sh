@@ -54,3 +54,9 @@ ANSIBLE_STRATEGY='free' ansible-playbook nested.yml  -i ../../inventory "$@" --s
 # https://github.com/ansible/ansible/pull/35164
 ANSIBLE_STRATEGY='linear' ansible-playbook playbook/honour_duplicates.yml -i ../../inventory "$@" --skip-tags never
 ANSIBLE_STRATEGY='free' ansible-playbook playbook/honour_duplicates.yml -i ../../inventory "$@" --skip-tags never
+
+
+## Include roles with tags in meta/main.yml make a role run more than neccesary
+# https://github.com/ansible/ansible/pull/35166
+ANSIBLE_STRATEGY='linear' ansible-playbook playbook/cached_role.yml -i ../../inventory -v "$@" --skip-tags never
+ANSIBLE_STRATEGY='free' ansible-playbook playbook/cached_role.yml -i ../../inventory -v "$@" --skip-tags never
