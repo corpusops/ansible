@@ -1,9 +1,50 @@
 Ansible Changes By Release
 ==========================
 
+<a id="2.4.4"></a>
+
+## 2.4.4 "Dancing Days" - TBD
+
+### Bugfixes
+* Fix `win_script` to work with large arguments and removed uneeded function
+  that produces errors and was not needed
+  (https://github.com/ansible/ansible/pull/33855)
+* Fix timeout when using piped ssh transfer with become
+  https://github.com/ansible/ansible/issues/34523
+* Fix win_scheduled_task docs to correctly reflect what is required and when
+  (https://github.com/ansible/ansible/issues/35072)
+* Updated copy test to create recursive symlink during the test and not have it
+  located in the git repo
+  (https://github.com/ansible/ansible/pull/35073)
+* Fix Digital Ocean tags data type due to backend API changes no longer
+  acceping integers
+  (https://github.com/ansible/ansible/pull/33486)
+* Fix for nxos_vxlan_vtep_vni issues: https://github.com/ansible/ansible/pull/34946
+* Fixes for nxos_bgp: https://github.com/ansible/ansible/pull/34590
+* Enable nxapi nxos_banner test: https://github.com/ansible/ansible/pull/35033
+* fix vxlan idempotent issue in nxos_vxlan_vtep: https://github.com/ansible/ansible/pull/34750
+* Fix win_dns_client to allow setting dynamic IP from static IP
+  (https://github.com/ansible/ansible/pull/35149)
+* Fix azure_rm_subnet absent idempotency issues
+  (https://github.com/ansible/ansible/pull/35037)
+* Fix azure_rm_virtualmachine creating VM with vnet in another resource group
+  (https://github.com/ansible/ansible/pull/35038)
+* Fix nxos terminal plugin regex to support certain commands
+  (https://github.com/ansible/ansible/pull/35186)
+* Fix network os_config modules backward diff
+  (https://github.com/ansible/ansible/pull/35332)
+* Fix nxos_snmp_user removing encryption from user on subsequent runs of the task
+  (https://github.com/ansible/ansible/pull/35433)
+* Fix traceback in winrm module when the ipaddress module is not installed
+  https://github.com/ansible/ansible/pull/35723/files
+* Fix bug in `lineinfile` where the line would not be inserted when using `insertbefore` or `insertafter` if the pattern occured anywhere in the file. (https://github.com/ansible/ansible/issues/28721)
+* Fix connection local getting overridden by network_cli for transport nxapi,eapi for platform agnostic modules
+  (https://github.com/ansible/ansible/pull/35590)
+
+
 <a id="2.4.3"></a>
 
-## 2.4.3 "Dancing Days" - TBD
+## 2.4.3 "Dancing Days" - 2018-01-31
 
 ### Bugfixes
 * Fix `pamd` rule args regexp to match file paths (https://github.com/ansible/ansible/pull/33432)
