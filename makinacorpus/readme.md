@@ -1,5 +1,9 @@
 # differences with pristine ansible
 
+## Backport on 2.4
+- [debug should have item (#36534)](https://github.com/ansible/ansible/commit/2f13ddbd694e8c6ae2f5d1737796c7a75109eda5#diff-ab09fa2a9291a017c38c5db420d7ee0f)
+- [Only template each hostvars var on-demand (fixes #33259)](https://github.com/ansible/ansible/commit/dae737c8b714f2c6d28663ef0afeab10e6d3a667)
+
 ## Ongoing PR included to the fork
 - Submitted
     - [include_role](https://github.com/ansible/ansible/pull/32565)
