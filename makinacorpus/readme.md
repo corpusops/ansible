@@ -6,7 +6,7 @@
       **ABANDONNED** cause splitted in more scopped sub PR
         - [Include roles with tags in meta/main.yml make a role run more than neccesary](https://github.com/ansible/ansible/pull/35133)
         - [fix Include role: exposed/shared vars](https://github.com/ansible/ansible/pull/35131)
-        - [FIX: multiple nested tasks include levels](https://github.com/ansible/ansible/pull/35107)
+        - [FIX: multiple nested tasks include levels](https://github.com/ansible/ansible/pull/35107) MERGED ON 2.5 but not on 2.4
         - [include role honour allow duplicates](https://github.com/ansible/ansible/pull/35132)
         - [Include role: serialization: (de)pickling support](https://github.com/ansible/ansible/pull/35134)
 
