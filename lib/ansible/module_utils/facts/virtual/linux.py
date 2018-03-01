@@ -114,6 +114,11 @@ class LinuxVirtual(Virtual):
             virtual_facts['virtualization_role'] = 'guest'
             return virtual_facts
 
+        if bios_vendor == 'Amazon EC2':
+            virtual_facts['virtualization_type'] = 'kvm'
+            virtual_facts['virtualization_role'] = 'guest'
+            return virtual_facts
+
         sys_vendor = get_file_content('/sys/devices/virtual/dmi/id/sys_vendor')
 
         # FIXME: This does also match hyperv
@@ -142,11 +147,16 @@ class LinuxVirtual(Virtual):
             virtual_facts['virtualization_role'] = 'guest'
             return virtual_facts
 
+        if sys_vendor == 'Amazon EC2':
+            virtual_facts['virtualization_type'] = 'kvm'
+            virtual_facts['virtualization_role'] = 'guest'
+            return virtual_facts
+
         if os.path.exists('/proc/self/status'):
             for line in get_file_lines('/proc/self/status'):
-                if re.match('^VxID: \d+', line):
+                if re.match(r'^VxID:\s+\d+', line):
                     virtual_facts['virtualization_type'] = 'linux_vserver'
-                    if re.match('^VxID: 0', line):
+                    if re.match(r'^VxID:\s+0', line):
                         virtual_facts['virtualization_role'] = 'host'
                     else:
                         virtual_facts['virtualization_role'] = 'guest'
@@ -200,7 +210,7 @@ class LinuxVirtual(Virtual):
                             if open(f).read().rstrip() == 'vdsm':
                                 virtual_facts['virtualization_type'] = 'RHEV'
                                 break
-                        except:
+                        except Exception:
                             pass
                     else:
                         virtual_facts['virtualization_type'] = 'kvm'

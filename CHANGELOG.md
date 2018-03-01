@@ -40,7 +40,56 @@ Ansible Changes By Release
 * Fix bug in `lineinfile` where the line would not be inserted when using `insertbefore` or `insertafter` if the pattern occured anywhere in the file. (https://github.com/ansible/ansible/issues/28721)
 * Fix connection local getting overridden by network_cli for transport nxapi,eapi for platform agnostic modules
   (https://github.com/ansible/ansible/pull/35590)
-
+* Include dest i nthe results from file copy:
+  https://github.com/ansible/ansible/pull/35702/
+* Fix eos_config second-level indent idempotece
+  https://github.com/ansible/ansible/pull/35588
+* Fix the removed_in_version to 2.6 ios_config force option
+  https://github.com/ansible/ansible/pull/35853
+* Fix memory ballooning caused as a result of task caching changes
+  https://github.com/ansible/ansible/pull/35921
+* Fix nxos_igmp_interface for diff nxos versions
+  (https://github.com/ansible/ansible/pull/35959)
+* Fix recursion error with many flat includes
+  (https://github.com/ansible/ansible/pull/36075)
+* Fix win_uri to work with `creates` and `removed` option
+  (https://github.com/ansible/ansible/pull/36016)
+* Fix the oom_killer parameter to docker_container not being honored
+  https://github.com/ansible/ansible/pull/34130
+* Fix docker_service so a build is not triggered every time
+  https://github.com/ansible/ansible/issues/36145
+* Be more tolerant about spaces when gathering virtual facts (https://github.com/ansible/ansible/pull/36042)
+* validate add_host name parameter (https://github.com/ansible/ansible/pull/36055)
+* spelling fixes (https://github.com/ansible/ansible/pull/36007)
+* avoid needles vault prompt on ansible-console (https://github.com/ansible/ansible/pull/36244)
+* fix callback function signatures (https://github.com/ansible/ansible/pull/35664)
+* Clarify error message from convert_bool()
+  https://github.com/ansible/ansible/pull/36041
+* Fix EC2 C5 instance_type fact to be kvm:
+  https://github.com/ansible/ansible/pull/35063
+* Fix templating of loop_control properties:
+  https://github.com/ansible/ansible/pull/36124
+* Fix dependency in the deb package on Ubuntu-12.04:
+  https://github.com/ansible/ansible/pull/36407
+* Fix WinRM Python 3 encoding when getting Kerberos ticket
+  (https://github.com/ansible/ansible/issues/36255)
+* Always show custom prompt in pause module
+  (https://github.com/ansible/ansible/issues/36057)
+* Improve performance and recursion depth in include_role
+  (https://github.com/ansible/ansible/pull/36470)
+* Fix using ansible_*_interpreter on Python3 with non-new-style modules
+  (old-style ansible python modules, modules written in another language, etc)
+  https://github.com/ansible/ansible/pull/36541
+* Fix vyos_config IndexError in sanitize_config
+  (https://github.com/ansible/ansible/issues/36351)
+* Fix vyos_l3_interface multiple address assignment to interfaces
+  (https://github.com/ansible/ansible/pull/36721)
+* Protect from inventory plugins using verify incorrectly
+  https://github.com/ansible/ansible/pull/36591
+* loop control templating
+  https://github.com/ansible/ansible/pull/36124
+* fix debug output
+  https://github.com/ansible/ansible/pull/36307
 
 <a id="2.4.3"></a>
 
