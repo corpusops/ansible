@@ -16,6 +16,7 @@
 
 ## divergences
 - [Workaround to speed up facts building](https://github.com/ansible/ansible/commit/d7d76e1871388e688dabcdccb64b3c9f2a878dc4)
+    - [#24228](https://github.com/ansible/ansible/issues/24228)
 
 ## Reverted commits
 - **REALLY TO BE CAREFUL FOR 2.5 AS IT WILL NOT BE REVERTED ON THAT BRANCH !!!**<br/>
