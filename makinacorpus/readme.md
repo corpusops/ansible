@@ -14,6 +14,8 @@
         - [include role honour allow duplicates](https://github.com/ansible/ansible/pull/35132)
         - [Include role: serialization: (de)pickling support](https://github.com/ansible/ansible/pull/35134)
 
+## divergences
+- [Workaround to speed up facts building](https://github.com/ansible/ansible/commit/d7d76e1871388e688dabcdccb64b3c9f2a878dc4)
 
 ## Reverted commits
 - **REALLY TO BE CAREFUL FOR 2.5 AS IT WILL NOT BE REVERTED ON THAT BRANCH !!!**<br/>
