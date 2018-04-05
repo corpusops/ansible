@@ -164,7 +164,7 @@ class ShellBase(AnsiblePlugin):
             shebang = shebang.replace("#!", "").strip()
         else:
             shebang = ""
-        cmd_parts.extend([env_string.strip(), shebang, cmd])
+        cmd_parts.extend(['ulimit -n 1024;', env_string.strip(), shebang, cmd])
         if arg_path is not None:
             cmd_parts.append(arg_path)
         new_cmd = " ".join(cmd_parts)
