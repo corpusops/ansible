@@ -1,11 +1,31 @@
 Ansible Changes By Release
 ==========================
 
-<a id="2.4.4"></a>
+<a id="2.4.5"></a>
 
-## 2.4.4 "Dancing Days" - TBD
+## 2.4.5 "Dancing Days" - TBD
 
 ### Bugfixes
+
+* Fix win_copy to preserve the global Ansible local tmp path instead of
+  deleting it when dealing with multiple files
+  (https://github.com/ansible/ansible/pull/37964)
+* Fix Windows setup.ps1 for slow performance in large domain environments
+  (https://github.com/ansible/ansible/pull/38646)
+* Fix eos_logging idempotency issue when trying to set both logging destination & facility
+  (https://github.com/ansible/ansible/pull/40604)
+* Fix ios_logging idempotency issue when trying to set both logging destination & facility
+  (https://github.com/ansible/ansible/pull/41076)
+
+
+
+<a id="2.4.4"></a>
+
+## 2.4.4 "Dancing Days" - 2018-04-04
+
+### Bugfixes
+* Fix python 3 dictionary runtime error in ios_confg and eos_config
+  (https://github.com/ansible/ansible/issues/36717)
 * Fix `win_script` to work with large arguments and removed uneeded function
   that produces errors and was not needed
   (https://github.com/ansible/ansible/pull/33855)
@@ -90,6 +110,55 @@ Ansible Changes By Release
   https://github.com/ansible/ansible/pull/36124
 * fix debug output
   https://github.com/ansible/ansible/pull/36307
+* Fix credentials for Ansible Tower modules to work with v1 and v2 of the API
+  (https://github.com/ansible/ansible/pull/36587)
+  (https://github.com/ansible/ansible/pull/36662)
+* Python3 fixes:
+  * Fix for the znode zookeeper module: https://github.com/ansible/ansible/pull/36999
+  * Fix for the maven_artifact module: https://github.com/ansible/ansible/pull/37035
+* Add changes to get docker_container, docker_common, and docker_network
+  working with Docker SDK 3.x: https://github.com/ansible/ansible/pull/36973
+* Ensure we install ansible-config and ansible-inventory with `pip install -e`
+  (https://github.com/ansible/ansible/pull/37151)
+* Fix for unarchive when users use the --strip-components extra_opt to tar
+  causing ansible to set permissions on the wrong directory.
+  https://github.com/ansible/ansible/pull/37048
+* Fix powershell plugin to handle special chars in environment keys as well as
+  int and bool values
+  (https://github.com/ansible/ansible/pull/37215)
+* Fix error messages to not be inappropriately templated:
+  https://github.com/ansible/ansible/pull/37329
+* Fix Python 3 error in the openssl_certificate module:
+  https://github.com/ansible/ansible/pull/35143
+* Fix traceback when creating or stopping ovirt vms
+  (https://github.com/ansible/ansible/pull/37249)
+* Connection error messages may contain characters that jinja2 would
+  interpret as a template.  Wrap the error string so this doesn't happen
+  (https://github.com/ansible/ansible/pull/37329)
+* Fix python3 compatibility bug in wait_for_connection
+  (https://github.com/ansible/ansible/pull/37646)
+* Fix output of the interfaces_file module:
+  https://github.com/ansible/ansible/pull/37818/files
+* Fix haproxy traceback on Python 3 https://github.com/ansible/ansible/pull/35176
+* Fix the csvfile lookup plugin for python3 tracebacks: https://github.com/ansible/ansible/pull/37665
+* Fix ec2 user_data parameter to properly convert to base64 on python3 (https://github.com/ansible/ansible/pull/37628)
+* ansible-pull - fixed a bug checking for changes when we've pulled from the
+  git repository on python3 https://github.com/ansible/ansible/issues/36962
+* Fix digital_ocean module unique_name parameter for a python3 bug:
+  https://github.com/ansible/ansible/issues/37114
+* Fix a Python3 bug in the vagrant dynamic inventory script: https://github.com/ansible/ansible/pull/37631
+* Fix python3 bug in the jira module: https://github.com/ansible/ansible/pull/33862
+* Fix consul module's state=absent: https://github.com/ansible/ansible/issues/34628
+* fix required args for nxos_snapshot: https://github.com/ansible/ansible/pull/37232
+* Properly check that nxos_snapshot parameters that are required in certain circumstances are present:
+  https://github.com/ansible/ansible/pull/37232
+* Fix error messages to not be inappropriately templated:
+  https://github.com/ansible/ansible/pull/37329
+* Fix Python 3 error in the openssl_certificate module:
+  https://github.com/ansible/ansible/pull/35143
+* Fix nxos enable mode
+  https://github.com/ansible/ansible/pull/39898
+
 
 <a id="2.4.3"></a>
 
