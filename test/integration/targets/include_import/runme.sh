@@ -50,6 +50,12 @@ ANSIBLE_STRATEGY='linear' ansible-playbook playbook/cached_role.yml -i ../../inv
 ANSIBLE_STRATEGY='free' ansible-playbook playbook/cached_role.yml -i ../../inventory -v "$@" --skip-tags never
 
 
+## Include role honour allow duplicates
+# https://github.com/ansible/ansible/pull/35164
+ANSIBLE_STRATEGY='linear' ansible-playbook playbook/honour_duplicates.yml -i ../../inventory "$@" --skip-tags never
+ANSIBLE_STRATEGY='free' ansible-playbook playbook/honour_duplicates.yml -i ../../inventory "$@" --skip-tags never
+
+
 ## Nested tasks
 # https://github.com/ansible/ansible/issues/34782
 ANSIBLE_STRATEGY='linear' ansible-playbook test_nested_tasks.yml  -i ../../inventory "$@"
