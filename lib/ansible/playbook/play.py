@@ -335,7 +335,7 @@ class Play(Base, Taggable, Become):
 
         if not skip_dynamic_roles:
             for role in self.get_dynamic_roles():
-                rdata = role.serialize()
+                rdata = role.serialize(no_play=True)
                 dynamic_roles.append(rdata)
 
         data['dynamic_roles'] = dynamic_roles
