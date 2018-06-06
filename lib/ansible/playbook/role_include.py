@@ -239,7 +239,6 @@ class IncludeRole(TaskInclude):
             dep_chain = self.get_dep_chain()
         return self._role.get_default_vars(dep_chain=dep_chain)
 
-
     def get_vars(self, include_params=True):
         all_vars = TaskInclude.get_vars(self, include_params=include_params)
         if self.is_loaded:  # not yet loaded skip
