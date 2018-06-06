@@ -38,6 +38,12 @@ ANSIBLE_STRATEGY='free' ansible-playbook role/test_include_role.yml -i ../../inv
 ANSIBLE_STRATEGY='linear' ansible-playbook test_recursion.yml -i ../../inventory "$@" --skip-tags never
 
 
+## shared vars
+# https://github.com/ansible/ansible/issues/21890
+ANSIBLE_STRATEGY='linear' ansible-playbook -i ../../inventory playbook/sharedvars.yml -v "$@" --skip-tags never
+ANSIBLE_STRATEGY='free' ansible-playbook -i ../../inventory playbook/sharedvars.yml -v "$@" --skip-tags never
+
+
 ## Nested tasks
 # https://github.com/ansible/ansible/issues/34782
 ANSIBLE_STRATEGY='linear' ansible-playbook nested.yml  -i ../../inventory "$@" --skip-tags never
@@ -54,14 +60,3 @@ ANSIBLE_STRATEGY='free' ansible-playbook playbook/honour_duplicates.yml -i ../..
 # https://github.com/ansible/ansible/pull/35166
 ANSIBLE_STRATEGY='linear' ansible-playbook playbook/cached_role.yml -i ../../inventory -v "$@" --skip-tags never
 ANSIBLE_STRATEGY='free' ansible-playbook playbook/cached_role.yml -i ../../inventory -v "$@" --skip-tags never
-
-
-# Inlcuded tasks should inherit attrs from non-dynamic blocks in parent chain
-# https://github.com/ansible/ansible/pull/38827
-ANSIBLE_STRATEGY='linear' ansible-playbook test_grandparent_inheritance.yml -i ../../inventory "$@"
-
-
-## shared vars
-# https://github.com/ansible/ansible/issues/21890
-ANSIBLE_STRATEGY='linear' ansible-playbook -i ../../inventory playbook/sharedvars.yml -v "$@" --skip-tags never
-ANSIBLE_STRATEGY='free' ansible-playbook -i ../../inventory playbook/sharedvars.yml -v "$@" --skip-tags never
