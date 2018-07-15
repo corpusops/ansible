@@ -57,6 +57,9 @@ options:
     default: None
 notes:
   - Handlers are made available to the whole play.
+  - Variables defined in C(vars) and C(default) for the role are exposed at playbook parsing time. Due to this,
+    these variables will be accessible to roles and tasks executed before the the location of the C(import_role) task.
+  - Unlike C(include_role) variable exposure is not configurable, and will always be exposed.
 '''
 
 EXAMPLES = """

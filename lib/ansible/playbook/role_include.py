@@ -45,7 +45,7 @@ class IncludeRole(TaskInclude):
 
     BASE = ('name', 'role')  # directly assigned
     FROM_ARGS = ('tasks_from', 'vars_from', 'defaults_from')  # used to populate from dict in role
-    OTHER_ARGS = ('private', 'allow_duplicates')  # assigned to matching property
+    OTHER_ARGS = ('apply', 'private', 'public', 'allow_duplicates')  # assigned to matching property
     VALID_ARGS = tuple(frozenset(BASE + FROM_ARGS + OTHER_ARGS))  # all valid args
 
     # =================================================================================
@@ -54,6 +54,7 @@ class IncludeRole(TaskInclude):
     # private as this is a 'module options' vs a task property
     _allow_duplicates = FieldAttribute(isa='bool', default=True, private=True)
     _private = FieldAttribute(isa='bool', default=None, private=True)
+    _public = FieldAttribute(isa='bool', default=False, private=True)
 
     def __init__(self, block=None, role=None, task_include=None):
 
@@ -76,8 +77,12 @@ class IncludeRole(TaskInclude):
         ri.vars.update(self.vars)
 
         # build role
-        actual_role = Role.load(ri, myplay, parent_role=self._parent_role, from_files=self._from_files)
+        actual_role = Role.load(ri, myplay, parent_role=self._parent_role, from_files=self._from_files,
+                                from_include=True)
         actual_role._metadata.allow_duplicates = self.allow_duplicates
+
+        if self.statically_loaded or self.public:
+            myplay.roles.append(actual_role)
 
         # save this for later use
         self._role_path = actual_role._role_path
@@ -110,7 +115,16 @@ class IncludeRole(TaskInclude):
         # name is needed, or use role as alias
         ir._role_name = ir.args.get('name', ir.args.get('role'))
         if ir._role_name is None:
-            raise AnsibleParserError("'name' is a required field for include_role.")
+            raise AnsibleParserError("'name' is a required field for %s." % ir.action, obj=data)
+
+        if 'public' in ir.args and ir.action != 'include_role':
+            raise AnsibleParserError('Invalid options for %s: private' % ir.action, obj=data)
+
+        if 'private' in ir.args:
+            display.deprecated(
+                msg='Supplying "private" for "%s" is a no op, and is deprecated' % ir.action,
+                version='2.8'
+            )
 
         # validate bad args, otherwise we silently ignore
         bad_opts = my_arg_names.difference(IncludeRole.VALID_ARGS)
