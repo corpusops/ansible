@@ -43,13 +43,6 @@ ANSIBLE_STRATEGY='free' ansible-playbook role/test_include_role.yml -i ../../inv
 # https://github.com/ansible/ansible/issues/23609
 ANSIBLE_STRATEGY='linear' ansible-playbook test_role_recursion.yml -i ../../inventory "$@"
 
-
-## Include role honour allow duplicates
-# https://github.com/ansible/ansible/pull/35164
-ANSIBLE_STRATEGY='linear' ansible-playbook playbook/honour_duplicates.yml -i ../../inventory "$@" --skip-tags never
-ANSIBLE_STRATEGY='free' ansible-playbook playbook/honour_duplicates.yml -i ../../inventory "$@" --skip-tags never
-
-
 ## Nested tasks
 # https://github.com/ansible/ansible/issues/34782
 ANSIBLE_STRATEGY='linear' ansible-playbook test_nested_tasks.yml  -i ../../inventory "$@"
@@ -71,10 +64,6 @@ ANSIBLE_STRATEGY='linear' ansible-playbook test_grandparent_inheritance.yml -i .
 ANSIBLE_STRATEGY='linear' ansible-playbook undefined_var/playbook.yml  -i ../../inventory "$@"
 ANSIBLE_STRATEGY='free' ansible-playbook undefined_var/playbook.yml  -i ../../inventory "$@"
 
-# Include path inheritance using host var for include file path
-ANSIBLE_STRATEGY='linear' ansible-playbook include_path_inheritance/playbook.yml  -i ../../inventory "$@"
-ANSIBLE_STRATEGY='free' ansible-playbook include_path_inheritance/playbook.yml  -i ../../inventory "$@"
-
 # include_ + apply (explicit inheritance)
 ANSIBLE_STRATEGY='linear' ansible-playbook apply/include_apply.yml -i ../../inventory "$@" --tags foo
 set +e
@@ -89,3 +78,16 @@ fi
 # https://github.com/ansible/ansible/issues/21890
 ANSIBLE_STRATEGY='linear' ansible-playbook -i ../../inventory playbook/sharedvars.yml -v "$@" --skip-tags never
 ANSIBLE_STRATEGY='free' ansible-playbook -i ../../inventory playbook/sharedvars.yml -v "$@" --skip-tags never
+
+# Test that duplicate items in loop are not deduped
+ANSIBLE_STRATEGY='linear' ansible-playbook tasks/test_include_dupe_loop.yml -i ../../inventory "$@" | tee test_include_dupe_loop.out
+test "$(grep -c '"item=foo"' test_include_dupe_loop.out)" = 3
+ANSIBLE_STRATEGY='free' ansible-playbook tasks/test_include_dupe_loop.yml -i ../../inventory "$@" | tee test_include_dupe_loop.out
+test "$(grep -c '"item=foo"' test_include_dupe_loop.out)" = 3
+
+ansible-playbook public_exposure/playbook.yml -i ../../inventory "$@"
+
+## Include role honour allow duplicates
+# https://github.com/ansible/ansible/pull/35164
+ANSIBLE_STRATEGY='linear' ansible-playbook playbook/honour_duplicates.yml -i ../../inventory "$@" --skip-tags never
+ANSIBLE_STRATEGY='free' ansible-playbook playbook/honour_duplicates.yml -i ../../inventory "$@" --skip-tags never
