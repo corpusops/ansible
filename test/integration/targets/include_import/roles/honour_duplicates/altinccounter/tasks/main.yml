@@ -1,4 +1,0 @@
----
-- set_fact:
-    cacheable: false
-    altcounter: "{{altcounter|int+1}}"
