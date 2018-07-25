@@ -10,6 +10,7 @@ import atexit
 import os
 import ssl
 import time
+from random import randint
 
 try:
     # requests is required for exception handling of the ConnectionError
@@ -21,7 +22,7 @@ except ImportError:
     HAS_PYVMOMI = False
 
 from ansible.module_utils._text import to_text
-from ansible.module_utils.six import integer_types, iteritems, string_types
+from ansible.module_utils.six import integer_types, iteritems, string_types, raise_from
 from ansible.module_utils.basic import env_fallback
 
 
@@ -29,20 +30,37 @@ class TaskError(Exception):
     pass
 
 
-def wait_for_task(task):
+def wait_for_task(task, max_backoff=64, timeout=3600):
+    """Wait for given task using exponential back-off algorithm.
+
+    Args:
+        task: VMware task object
+        max_backoff: Maximum amount of sleep time in seconds
+        timeout: Timeout for the given task in seconds
+
+    Returns: Tuple with True and result for successful task
+    Raises: TaskError on failure
+    """
+    failure_counter = 0
+    start_time = time.time()
 
     while True:
+        if time.time() - start_time >= timeout:
+            raise TaskError("Timeout")
         if task.info.state == vim.TaskInfo.State.success:
             return True, task.info.result
         if task.info.state == vim.TaskInfo.State.error:
+            error_msg = task.info.error
             try:
-                raise TaskError(task.info.error)
+                error_msg = error_msg.msg
             except AttributeError:
-                raise TaskError("An unknown error has occurred")
-        if task.info.state == vim.TaskInfo.State.running:
-            time.sleep(15)
-        if task.info.state == vim.TaskInfo.State.queued:
-            time.sleep(15)
+                pass
+            finally:
+                raise_from(TaskError(error_msg), task.info.error)
+        if task.info.state in [vim.TaskInfo.State.running, vim.TaskInfo.State.queued]:
+            sleep_time = min(2 ** failure_counter + randint(1, 1000), max_backoff)
+            time.sleep(sleep_time)
+            failure_counter += 1
 
 
 def wait_for_vm_ip(content, vm, timeout=300):
@@ -482,7 +500,15 @@ def connect_to_api(module, disconnect_atexit=True):
 
     service_instance = None
     try:
-        service_instance = connect.SmartConnect(host=hostname, user=username, pwd=password, sslContext=ssl_context, port=port)
+        connect_args = dict(
+            host=hostname,
+            user=username,
+            pwd=password,
+            port=port,
+        )
+        if ssl_context:
+            connect_args.update(sslContext=ssl_context)
+        service_instance = connect.SmartConnect(**connect_args)
     except vim.fault.InvalidLogin as invalid_login:
         module.fail_json(msg="Unable to log on to vCenter or ESXi API at %s:%s as %s: %s" % (hostname, port, username, invalid_login.msg))
     except vim.fault.NoPermission as no_permission:

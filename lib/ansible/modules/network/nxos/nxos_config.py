@@ -393,7 +393,7 @@ def main():
 
     try:
         info = get_capabilities(module)
-        api = info.get('network_api', 'nxapi')
+        api = info.get('network_api')
         device_info = info.get('device_info', {})
         os_platform = device_info.get('network_os_platform', '')
     except ConnectionError:
@@ -444,7 +444,7 @@ def main():
 
             result['changed'] = True
 
-    running_config = None
+    running_config = module.params['running_config']
     startup_config = None
 
     diff_ignore_lines = module.params['diff_ignore_lines']
@@ -467,7 +467,7 @@ def main():
             output = execute_show_commands(module, 'show running-config')
             contents = output[0]
         else:
-            contents = running_config.config_text
+            contents = running_config
 
         # recreate the object in order to process diff_ignore_lines
         running_config = NetworkConfig(indent=1, contents=contents, ignore_lines=diff_ignore_lines)
