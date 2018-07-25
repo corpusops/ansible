@@ -74,11 +74,6 @@ if [[ -z "$OUT" ]]; then
     exit 1
 fi
 
-## shared vars
-# https://github.com/ansible/ansible/issues/21890
-ANSIBLE_STRATEGY='linear' ansible-playbook -i ../../inventory playbook/sharedvars.yml -v "$@" --skip-tags never
-ANSIBLE_STRATEGY='free' ansible-playbook -i ../../inventory playbook/sharedvars.yml -v "$@" --skip-tags never
-
 # Test that duplicate items in loop are not deduped
 ANSIBLE_STRATEGY='linear' ansible-playbook tasks/test_include_dupe_loop.yml -i ../../inventory "$@" | tee test_include_dupe_loop.out
 test "$(grep -c '"item=foo"' test_include_dupe_loop.out)" = 3
