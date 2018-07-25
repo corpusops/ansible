@@ -78,10 +78,6 @@ class IncludeRole(TaskInclude):
             myplay = self._parent._play
         else:
             myplay = play
-        if variable_manager is None or loader is None:
-            variable_manager = self.get_variable_manager()
-        if loader is None:
-            loader = variable_manager._loader
 
         ri = RoleInclude.load(self._role_name, play=myplay, variable_manager=variable_manager, loader=loader)
         rvars = {}
@@ -89,15 +85,6 @@ class IncludeRole(TaskInclude):
         ri.vars.update(rvars)
 
         # build role
-        if self.vars:
-            v = self.vars.copy()
-            # bypass vars from include_role itself
-            for k in [
-                'name', 'private', 'allow_duplicates',
-                'defaults_from', 'tasks_from', 'vars_from'
-            ]:
-                v.pop(k, None)
-            ri.vars.update(v)
         actual_role = Role.load(ri, myplay, parent_role=self._parent_role, from_files=self._from_files)
         actual_role._metadata.allow_duplicates = self.allow_duplicates
 
@@ -106,7 +93,6 @@ class IncludeRole(TaskInclude):
         self._role = actual_role
         if myplay is not None:
             self._play = myplay
-            self._play.register_dynamic_role(self)
 
         # compile role with parent roles as dependencies to ensure they inherit
         # variables
