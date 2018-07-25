@@ -86,3 +86,8 @@ ansible-playbook public_exposure/playbook.yml -i ../../inventory "$@"
 # https://github.com/ansible/ansible/pull/35166
 ANSIBLE_STRATEGY='linear' ansible-playbook playbook/cached_role.yml -i ../../inventory -v "$@" --skip-tags never
 ANSIBLE_STRATEGY='free' ansible-playbook playbook/cached_role.yml -i ../../inventory -v "$@" --skip-tags never
+
+## Include role honour allow duplicates
+# https://github.com/ansible/ansible/pull/35164
+ANSIBLE_STRATEGY='linear' ansible-playbook playbook/honour_duplicates.yml -i ../../inventory "$@" --skip-tags never
+ANSIBLE_STRATEGY='free' ansible-playbook playbook/honour_duplicates.yml -i ../../inventory "$@" --skip-tags never
