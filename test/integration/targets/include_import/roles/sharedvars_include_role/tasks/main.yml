@@ -1,4 +1,0 @@
----
-- name: noop task
-  shell: echo from role
-  register: test1
