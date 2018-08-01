@@ -78,7 +78,14 @@ class IncludeRole(TaskInclude):
 
         # build role
         actual_role = Role.load(ri, myplay, parent_role=self._parent_role, from_files=self._from_files)
-        actual_role._metadata.allow_duplicates = self.allow_duplicates
+        # proxy allow_duplicates attribute to role if explicitly set
+        if self.allow_duplicates is not None:
+            actual_role._metadata.allow_duplicates = self.allow_duplicates
+        # in any case sync allow_duplicates between the role and this include statement
+        # This is the side effect if we didnt explicitly setted the allow_duplicates attribute
+        # to fallback on the included role setting
+        if self.allow_duplicates is None and actual_role._metadata:
+            self.allow_duplicates = actual_role._metadata.allow_duplicates
 
         # save this for later use
         self._role_path = actual_role._role_path
