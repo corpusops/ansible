@@ -84,8 +84,8 @@ ansible-playbook public_exposure/playbook.yml -i ../../inventory "$@"
 
 ## Include roles with tags in meta/main.yml make a role run more than neccesary
 # https://github.com/ansible/ansible/pull/35166
-ANSIBLE_STRATEGY='linear' ansible-playbook playbook/cached_role.yml -i ../../inventory -v "$@" --skip-tags never
-ANSIBLE_STRATEGY='free' ansible-playbook playbook/cached_role.yml -i ../../inventory -v "$@" --skip-tags never
+ANSIBLE_STRATEGY='linear' ansible-playbook playbook/cached_role.yml -i ../../inventory -v "$@"
+ANSIBLE_STRATEGY='free' ansible-playbook playbook/cached_role.yml -i ../../inventory -v "$@" 
 
 ## Include role honour allow duplicates
 # https://github.com/ansible/ansible/pull/35164
