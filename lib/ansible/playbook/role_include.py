@@ -171,13 +171,6 @@ class IncludeRole(TaskInclude):
             v.update(self._parent_role.get_role_params())
         return v
 
-    def get_default_vars(self, dep_chain=None):
-        if not self.is_loaded:
-            return dict()
-        if dep_chain is None:
-            dep_chain = self.get_dep_chain()
-        return self._role.get_default_vars(dep_chain=dep_chain)
-
     def strip_vars(self, all_vars):
         # Remove the args configuring the role itself from arguments
         stripped_args = frozenset(self.args.keys()).intersection(self.VALID_ARGS)
