@@ -181,11 +181,7 @@ class IncludeRole(TaskInclude):
                 pass
         return all_vars
 
-    def get_vars(self, include_params=True):
-        all_vars = TaskInclude.get_vars(self, include_params=include_params)
-        if self.is_loaded:  # not yet loaded skip
-            all_vars.update(
-                self._role.get_vars(include_params=include_params)
-            )
+    def get_vars(self):
+        all_vars = super(IncludeRole, self).get_vars()
         all_vars = self.strip_vars(all_vars)
         return all_vars
