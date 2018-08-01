@@ -13,7 +13,7 @@
     - [include role honour allow duplicates](https://github.com/ansible/ansible/pull/35164)
         - [2.4](https://github.com/corpusops/ansible/tree/include_role_honour_allow_duplicates) [devel](https://github.com/corpusops/ansible/tree/include_role_honour_allow_duplicates_devel)
 
-## divergences
+## divergences (on all branches)
 - [Workaround to speed up facts building](https://github.com/ansible/ansible/commit/23371b5617cb02ae0edfc46ee6fc4ee8f5f0a523)
     - [#24228](https://github.com/ansible/ansible/issues/24228)
 - [include_role vars will be exposed by default](https://github.com/ansible/ansible/commit/4b281f23f1b66116594676506d12948869bf262b)
