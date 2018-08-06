@@ -131,7 +131,7 @@ class Cliconf(CliconfBase):
         diff['config_diff'] = dumps(configdiffobjs, 'commands') if configdiffobjs else ''
         return diff
 
-    def get_config(self, source='running', format='text', flag=None):
+    def get_config(self, source='running', format='text', flags=None):
         options_values = self.get_option_values()
         if format not in options_values['format']:
             raise ValueError("'format' value %s is invalid. Valid values are %s" % (format, ','.join(options_values['format'])))
@@ -144,8 +144,8 @@ class Cliconf(CliconfBase):
         if format and format is not 'text':
             cmd += '| %s ' % format
 
-        if flag:
-            cmd += ' '.join(to_list(flag))
+        if flags:
+            cmd += ' '.join(to_list(flags))
         cmd = cmd.strip()
 
         return self.send_command(cmd)
@@ -158,6 +158,9 @@ class Cliconf(CliconfBase):
         requests = []
 
         if replace:
+            device_info = self.get_device_info()
+            if '9K' not in device_info.get('network_os_platform', ''):
+                raise ConnectionError(msg=u'replace is supported only on Nexus 9K devices')
             candidate = 'config replace {0}'.format(replace)
 
         if commit:
@@ -244,8 +247,9 @@ class Cliconf(CliconfBase):
 
     def get_capabilities(self):
         result = {}
-        result['rpc'] = self.get_base_rpc()
+        result['rpc'] = self.get_base_rpc() + ['get_diff', 'run_commands']
         result['device_info'] = self.get_device_info()
+        result['device_operations'] = self.get_device_operations()
         result.update(self.get_option_values())
 
         if isinstance(self._connection, NetworkCli):

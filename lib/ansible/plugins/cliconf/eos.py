@@ -75,7 +75,7 @@ class Cliconf(CliconfBase):
         return resp
 
     @enable_mode
-    def get_config(self, source='running', format='text', flag=None):
+    def get_config(self, source='running', format='text', flags=None):
         options_values = self.get_option_values()
         if format not in options_values['format']:
             raise ValueError("'format' value %s is invalid. Valid values are %s" % (format, ','.join(options_values['format'])))
@@ -88,7 +88,7 @@ class Cliconf(CliconfBase):
         if format and format is not 'text':
             cmd += '| %s ' % format
 
-        cmd += ' '.join(to_list(flag))
+        cmd += ' '.join(to_list(flags))
         cmd = cmd.strip()
         return self.send_command(cmd)
 
@@ -289,8 +289,8 @@ class Cliconf(CliconfBase):
 
     def get_capabilities(self):
         result = {}
-        result['rpc'] = self.get_base_rpc()
-        result['device_info'] = self.get_device_info()
+        rpc_list = ['commit', 'discard_changes', 'get_diff', 'run_commands', 'supports_sessions']
+        result['rpc'] = self.get_base_rpc() + rpc_list
         result['device_info'] = self.get_device_info()
         result['device_operations'] = self.get_device_operations()
         result.update(self.get_option_values())
