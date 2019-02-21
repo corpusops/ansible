@@ -1,22 +1,9 @@
 #!/usr/bin/env python
-# (c) 2012, Jan-Piet Mens <jpmens () gmail.com>
-# (c) 2012-2014, Michael DeHaan <michael@ansible.com> and others
-# (c) 2017 Ansible Project
-#
-# This file is part of Ansible
-#
-# Ansible is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# Ansible is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright: (c) 2012, Jan-Piet Mens <jpmens () gmail.com>
+# Copyright: (c) 2012-2014, Michael DeHaan <michael@ansible.com> and others
+# Copyright: (c) 2017, Ansible Project
+
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
@@ -47,6 +34,7 @@ except ImportError:
 import jinja2
 import yaml
 from jinja2 import Environment, FileSystemLoader
+from jinja2.runtime import Undefined
 from six import iteritems, string_types
 
 from ansible.errors import AnsibleError
@@ -158,6 +146,22 @@ def rst_xline(width, char="="):
     return char * width
 
 
+def documented_type(text):
+    ''' Convert any python type to a type for documentation '''
+
+    if isinstance(text, Undefined):
+        return '-'
+    if text == 'str':
+        return 'string'
+    if text == 'bool':
+        return 'boolean'
+    if text == 'int':
+        return 'integer'
+    if text == 'dict':
+        return 'dictionary'
+    return text
+
+
 test_list = partial(is_sequence, include_strings=False)
 
 
@@ -206,6 +210,7 @@ def get_plugin_info(module_dir, limit_to=None, verbose=False):
             :aliases: set of aliases to this module name
             :metadata: The modules metadata (as recorded in the module)
             :doc: The documentation structure for the module
+            :seealso: The list of dictionaries with references to related subjects
             :examples: The module's examples
             :returndocs: The module's returndocs
 
@@ -362,10 +367,11 @@ def jinja2_environment(template_dir, typ, plugin_type):
 
     templates = {}
     if typ == 'rst':
-        env.filters['convert_symbols_to_format'] = rst_ify
+        env.filters['rst_ify'] = rst_ify
         env.filters['html_ify'] = html_ify
         env.filters['fmt'] = rst_fmt
         env.filters['xline'] = rst_xline
+        env.filters['documented_type'] = documented_type
         env.tests['list'] = test_list
         templates['plugin'] = env.get_template('plugin.rst.j2')
 
@@ -463,14 +469,14 @@ def process_plugins(module_map, templates, outputname, output_dir, ansible_versi
             for (k, v) in iteritems(doc['options']):
                 # Error out if there's no description
                 if 'description' not in doc['options'][k]:
-                    raise AnsibleError("Missing required description for option %s in %s " % (k, module))
+                    raise AnsibleError("Missing required description for parameter '%s' in '%s' " % (k, module))
 
                 # Error out if required isn't a boolean (people have been putting
                 # information on when something is required in here.  Those need
                 # to go in the description instead).
                 required_value = doc['options'][k].get('required', False)
                 if not isinstance(required_value, bool):
-                    raise AnsibleError("Invalid required value '%s' for option '%s' in '%s' (must be truthy)" % (required_value, k, module))
+                    raise AnsibleError("Invalid required value '%s' for parameter '%s' in '%s' (must be truthy)" % (required_value, k, module))
 
                 # Strip old version_added information for options
                 if 'version_added' in doc['options'][k] and too_old(doc['options'][k]['version_added']):
@@ -573,7 +579,7 @@ def process_support_levels(plugin_info, templates, output_dir, plugin_type):
                                                       " Ansible Network Team<network_maintained>` in"
                                                       " a relationship similar to how the Ansible Core Team"
                                                       " maintains the Core modules."},
-                    'Ansible Partners': {'slug': 'partner_supported',
+                    'Ansible Partners': {'slug': 'certified_supported',
                                          'modules': [],
                                          'output': 'partner_maintained.rst',
                                          'blurb': """

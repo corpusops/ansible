@@ -81,29 +81,6 @@ def nopad_b64(data):
     return base64.urlsafe_b64encode(data).decode('utf8').replace("=", "")
 
 
-def simple_get(module, url):
-    resp, info = fetch_url(module, url, method='GET')
-
-    result = {}
-    try:
-        content = resp.read()
-    except AttributeError:
-        content = info.get('body')
-
-    if content:
-        if info['content-type'].startswith('application/json'):
-            try:
-                result = module.from_json(content.decode('utf8'))
-            except ValueError:
-                raise ModuleFailException("Failed to parse the ACME response: {0} {1}".format(url, content))
-        else:
-            result = content
-
-    if info['status'] >= 400:
-        raise ModuleFailException("ACME request failed: CODE: {0} RESULT: {1}".format(info['status'], result))
-    return result
-
-
 def read_file(fn, mode='b'):
     try:
         with open(fn, 'r' + mode) as f:
@@ -469,12 +446,12 @@ class ACMEDirectory(object):
     https://tools.ietf.org/html/draft-ietf-acme-acme-14#section-7.1.1
     '''
 
-    def __init__(self, module):
+    def __init__(self, module, account):
         self.module = module
         self.directory_root = module.params['acme_directory']
         self.version = module.params['acme_version']
 
-        self.directory = simple_get(self.module, self.directory_root)
+        self.directory, dummy = account.get_request(self.directory_root, get_only=True)
 
         # Check whether self.version matches what we expect
         if self.version == 1:
@@ -512,7 +489,6 @@ class ACMEAccount(object):
         # account_key path and content are mutually exclusive
         self.key = module.params['account_key_src']
         self.key_content = module.params['account_key_content']
-        self.directory = ACMEDirectory(module)
 
         # Grab account URI from module parameters.
         # Make sure empty string is treated as None.
@@ -532,6 +508,8 @@ class ACMEAccount(object):
             if self.uri:
                 # Make sure self.jws_header is updated
                 self.set_account_uri(self.uri)
+
+        self.directory = ACMEDirectory(module, self)
 
     def get_keyauthorization(self, token):
         '''
@@ -556,7 +534,10 @@ class ACMEAccount(object):
 
     def sign_request(self, protected, payload, key_data):
         try:
-            payload64 = nopad_b64(self.module.jsonify(payload).encode('utf8'))
+            if payload is None:
+                payload64 = ''
+            else:
+                payload64 = nopad_b64(self.module.jsonify(payload).encode('utf8'))
             protected64 = nopad_b64(self.module.jsonify(protected).encode('utf8'))
         except Exception as e:
             raise ModuleFailException("Failed to encode payload / headers as JSON: {0}".format(e))
@@ -566,11 +547,14 @@ class ACMEAccount(object):
         else:
             return _sign_request_openssl(self._openssl_bin, self.module, payload64, protected64, key_data)
 
-    def send_signed_request(self, url, payload, key_data=None, jws_header=None):
+    def send_signed_request(self, url, payload, key_data=None, jws_header=None, parse_json_result=True):
         '''
         Sends a JWS signed HTTP POST request to the ACME server and returns
         the response as dictionary
         https://tools.ietf.org/html/draft-ietf-acme-acme-14#section-6.2
+
+        If payload is None, a POST-as-GET is performed.
+        (https://tools.ietf.org/html/draft-ietf-acme-acme-15#section-6.3)
         '''
         key_data = key_data or self.key_data
         jws_header = jws_header or self.jws_header
@@ -594,25 +578,71 @@ class ACMEAccount(object):
             try:
                 content = resp.read()
             except AttributeError:
-                content = info.get('body')
+                content = info.pop('body', None)
 
-            if content:
-                if info['content-type'].startswith('application/json') or 400 <= info['status'] < 600:
+            if content or not parse_json_result:
+                if (parse_json_result and info['content-type'].startswith('application/json')) or 400 <= info['status'] < 600:
                     try:
-                        result = self.module.from_json(content.decode('utf8'))
+                        decoded_result = self.module.from_json(content.decode('utf8'))
                         # In case of badNonce error, try again (up to 5 times)
                         # (https://tools.ietf.org/html/draft-ietf-acme-acme-14#section-6.6)
                         if (400 <= info['status'] < 600 and
-                                result.get('type') == 'urn:ietf:params:acme:error:badNonce' and
+                                decoded_result.get('type') == 'urn:ietf:params:acme:error:badNonce' and
                                 failed_tries <= 5):
                             failed_tries += 1
                             continue
+                        if parse_json_result:
+                            result = decoded_result
+                        else:
+                            result = content
                     except ValueError:
                         raise ModuleFailException("Failed to parse the ACME response: {0} {1}".format(url, content))
                 else:
                     result = content
 
             return result, info
+
+    def get_request(self, uri, parse_json_result=True, headers=None, get_only=False):
+        '''
+        Perform a GET-like request. Will try POST-as-GET for ACMEv2, with fallback
+        to GET if server replies with a status code of 405.
+        '''
+        if not get_only and self.version != 1:
+            # Try POST-as-GET
+            content, info = self.send_signed_request(uri, None, parse_json_result=False)
+            if info['status'] == 405:
+                # Instead, do unauthenticated GET
+                get_only = True
+        else:
+            # Do unauthenticated GET
+            get_only = True
+
+        if get_only:
+            # Perform unauthenticated GET
+            resp, info = fetch_url(self.module, uri, method='GET', headers=headers)
+
+            try:
+                content = resp.read()
+            except AttributeError:
+                content = info.pop('body', None)
+
+        # Process result
+        if parse_json_result:
+            result = {}
+            if content:
+                if info['content-type'].startswith('application/json'):
+                    try:
+                        result = self.module.from_json(content.decode('utf8'))
+                    except ValueError:
+                        raise ModuleFailException("Failed to parse the ACME response: {0} {1}".format(uri, content))
+                else:
+                    result = content
+        else:
+            result = content
+
+        if info['status'] >= 400:
+            raise ModuleFailException("ACME request failed: CODE: {0} RESULT: {1}".format(info['status'], result))
+        return result, info
 
     def set_account_uri(self, uri):
         '''
@@ -654,14 +684,26 @@ class ACMEAccount(object):
             url = self.directory['newAccount']
 
         result, info = self.send_signed_request(url, new_reg)
-        if 'location' in info:
-            self.set_account_uri(info['location'])
 
         if info['status'] in ([200, 201] if self.version == 1 else [201]):
             # Account did not exist
+            if 'location' in info:
+                self.set_account_uri(info['location'])
             return True
         elif info['status'] == (409 if self.version == 1 else 200):
             # Account did exist
+            if result.get('status') == 'deactivated':
+                # A probable bug in Pebble (https://github.com/letsencrypt/pebble/issues/179)
+                # and Boulder: this should not return a valid account object according to
+                # https://tools.ietf.org/html/draft-ietf-acme-acme-16#section-7.3.6:
+                #     "Once an account is deactivated, the server MUST NOT accept further
+                #      requests authorized by that account's key."
+                if not allow_creation:
+                    return False
+                else:
+                    raise ModuleFailException("Account is deactivated")
+            if 'location' in info:
+                self.set_account_uri(info['location'])
             return False
         elif info['status'] == 400 and result['type'] == 'urn:ietf:params:acme:error:accountDoesNotExist' and not allow_creation:
             # Account does not exist (and we didn't try to create it)
@@ -677,10 +719,19 @@ class ACMEAccount(object):
         '''
         if self.uri is None:
             raise ModuleFailException("Account URI unknown")
-        data = {}
         if self.version == 1:
+            data = {}
             data['resource'] = 'reg'
-        result, info = self.send_signed_request(self.uri, data)
+            result, info = self.send_signed_request(self.uri, data)
+        else:
+            # try POST-as-GET first (draft-15 or newer)
+            data = None
+            result, info = self.send_signed_request(self.uri, data)
+            # check whether that failed with a malformed request error
+            if info['status'] >= 400 and result.get('type') == 'urn:ietf:params:acme:error:malformed':
+                # retry as a regular POST (with no changed data) for pre-draft-15 ACME servers
+                data = {}
+                result, info = self.send_signed_request(self.uri, data)
         if info['status'] in (400, 403) and result.get('type') == 'urn:ietf:params:acme:error:unauthorized':
             # Returned when account is deactivated
             return None

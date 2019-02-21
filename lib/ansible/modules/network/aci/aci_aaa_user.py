@@ -9,7 +9,7 @@ __metaclass__ = type
 
 ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['preview'],
-                    'supported_by': 'community'}
+                    'supported_by': 'certified'}
 
 DOCUMENTATION = r'''
 ---
@@ -286,7 +286,7 @@ def main():
     aaa_password_lifetime = module.params['aaa_password_lifetime']
     aaa_password_update_required = aci.boolean(module.params['aaa_password_update_required'])
     aaa_user = module.params['aaa_user']
-    clear_password_history = module.params['clear_password_history']
+    clear_password_history = aci.boolean(module.params['clear_password_history'], 'yes', 'no')
     description = module.params['description']
     email = module.params['email']
     enabled = aci.boolean(module.params['enabled'], 'active', 'inactive')
@@ -319,6 +319,7 @@ def main():
             class_config=dict(
                 accountStatus=enabled,
                 clearPwdHistory=clear_password_history,
+                descr=description,
                 email=email,
                 expiration=expiration,
                 expires=expires,

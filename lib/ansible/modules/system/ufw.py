@@ -301,6 +301,8 @@ def main():
         cmd = [[ufw_bin], [module.check_mode, '--dry-run']]
 
         if command == 'state':
+            if value == 'reset' and module.check_mode:
+                continue
             states = {'enabled': 'enable', 'disabled': 'disable',
                       'reloaded': 'reload', 'reset': 'reset'}
             execute(cmd + [['-f'], [states[value]]])
@@ -309,9 +311,13 @@ def main():
             execute(cmd + [[command], [value]])
 
         elif command == 'default':
+            if params['direction'] not in ['outgoing', 'incoming', 'routed']:
+                module.fail_json(msg='For default, direction must be one of "outgoing", "incoming" and "routed".')
             execute(cmd + [[command], [value], [params['direction']]])
 
         elif command == 'rule':
+            if params['direction'] not in ['in', 'out', None]:
+                module.fail_json(msg='For rules, direction must be one of "in" and "out".')
             # Rules are constructed according to the long format
             #
             # ufw [--dry-run] [route] [delete] [insert NUM] allow|deny|reject|limit [in|out on INTERFACE] [log|log-all] \

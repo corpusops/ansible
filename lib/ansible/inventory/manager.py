@@ -24,6 +24,9 @@ import os
 import re
 import itertools
 
+from operator import attrgetter
+from random import shuffle
+
 from ansible import constants as C
 from ansible.errors import AnsibleError, AnsibleOptionsError, AnsibleParserError
 from ansible.inventory.data import InventoryData
@@ -278,7 +281,7 @@ class InventoryManager(object):
                         display.debug('%s failed to parse %s' % (plugin_name, source))
                         failures.append({'src': source, 'plugin': plugin_name, 'exc': AnsibleError(e)})
                 else:
-                    display.debug('%s did not meet %s requirements' % (source, plugin_name))
+                    display.v('%s did not meet %s requirements, check plugin documentation if this is unexpected' % (source, plugin_name))
             else:
                 if not parsed and failures:
                     # only if no plugin processed files should we show errors.
@@ -368,14 +371,12 @@ class InventoryManager(object):
 
             # sort hosts list if needed (should only happen when called from strategy)
             if order in ['sorted', 'reverse_sorted']:
-                from operator import attrgetter
                 hosts = sorted(self._hosts_patterns_cache[pattern_hash][:], key=attrgetter('name'), reverse=(order == 'reverse_sorted'))
             elif order == 'reverse_inventory':
-                hosts = sorted(self._hosts_patterns_cache[pattern_hash][:], reverse=True)
+                hosts = self._hosts_patterns_cache[pattern_hash][::-1]
             else:
                 hosts = self._hosts_patterns_cache[pattern_hash][:]
                 if order == 'shuffle':
-                    from random import shuffle
                     shuffle(hosts)
                 elif order not in [None, 'inventory']:
                     raise AnsibleOptionsError("Invalid 'order' specified for inventory hosts: %s" % order)

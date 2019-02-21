@@ -36,12 +36,13 @@ except ImportError:
 class TerminalModule(TerminalBase):
 
     terminal_stdout_re = [
-        re.compile(br"[\r\n]?[\w+\-\.:\/\[\]]+(?:\([^\)]+\)){,3}(?:>|#) ?$|%"),
+        re.compile(br"[\r\n]?[\w@+\-\.:\/\[\]]+[>#%] ?$"),
     ]
 
     terminal_stderr_re = [
         re.compile(br"unknown command"),
-        re.compile(br"syntax error,")
+        re.compile(br"syntax error"),
+        re.compile(br"[\r\n]error:")
     ]
 
     def on_open_shell(self):

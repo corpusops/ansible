@@ -93,7 +93,7 @@ def find_user(module, client, user_name):
             if u_name['user'] == user_name:
                 name = u_name
                 break
-    except ansible.module_utils.urls.ConnectionError as e:
+    except (ansible.module_utils.urls.ConnectionError, influx.exceptions.InfluxDBClientError) as e:
         module.fail_json(msg=str(e))
     return name
 
@@ -166,11 +166,12 @@ def main():
 
     if state == 'present':
         if user:
-            if check_user_password(module, client, user_name, user_password):
+            if user_password is None or check_user_password(module, client, user_name, user_password):
                 module.exit_json(changed=False)
             else:
                 set_user_password(module, client, user_name, user_password)
         else:
+            user_password = user_password or ''
             create_user(module, client, user_name, user_password, admin)
 
     if state == 'absent':

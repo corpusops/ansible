@@ -255,30 +255,32 @@ class Connection(ConnectionBase):
         super(Connection, self).exec_command(cmd, in_data=in_data,
                                              sudoable=sudoable)
 
-        if cmd == "-" and not in_data.startswith(b"#!"):
-            # The powershell plugin sets cmd to '-' when we are executing a
-            # PowerShell script with in_data being the script to execute.
-            script = in_data
-            in_data = None
-            display.vvv("PSRP: EXEC (via pipeline wrapper)",
-                        host=self._psrp_host)
-        elif cmd == "-":
-            # ANSIBALLZ wrapper, we need to get the interpreter and execute
-            # that as the script - note this won't work as basic.py relies
-            # on packages not available on Windows, once fixed we can enable
-            # this path
-            interpreter = to_native(in_data.splitlines()[0][2:])
-            # script = "$input | &'%s' -" % interpreter
-            # in_data = to_text(in_data)
-            raise AnsibleError("cannot run the interpreter '%s' on the psrp "
-                               "connection plugin" % interpreter)
-        elif cmd.startswith(" ".join(_common_args) + " -EncodedCommand"):
+        if cmd.startswith(" ".join(_common_args) + " -EncodedCommand"):
             # This is a PowerShell script encoded by the shell plugin, we will
             # decode the script and execute it in the runspace instead of
             # starting a new interpreter to save on time
             b_command = base64.b64decode(cmd.split(" ")[-1])
             script = to_text(b_command, 'utf-16-le')
-            display.vvv("PSRP: EXEC %s" % script, host=self._psrp_host)
+            in_data = to_text(in_data, errors="surrogate_or_strict", nonstring="passthru")
+
+            if in_data and in_data.startswith(u"#!"):
+                # ANSIBALLZ wrapper, we need to get the interpreter and execute
+                # that as the script - note this won't work as basic.py relies
+                # on packages not available on Windows, once fixed we can enable
+                # this path
+                interpreter = to_native(in_data.splitlines()[0][2:])
+                # script = "$input | &'%s' -" % interpreter
+                # in_data = to_text(in_data)
+                raise AnsibleError("cannot run the interpreter '%s' on the psrp "
+                                   "connection plugin" % interpreter)
+
+            # call build_module_command to get the bootstrap wrapper text
+            bootstrap_wrapper = self._shell.build_module_command('', '', '')
+            if bootstrap_wrapper == cmd:
+                # Do not display to the user each invocation of the bootstrap wrapper
+                display.vvv("PSRP: EXEC (via pipeline wrapper)")
+            else:
+                display.vvv("PSRP: EXEC %s" % script, host=self._psrp_host)
         else:
             # in other cases we want to execute the cmd as the script
             script = cmd
@@ -546,26 +548,24 @@ if ($bytes_read -gt 0) {
         # TODO: figure out a better way of merging this with the host output
         stdout_list = []
         for output in pipeline.output:
-            # not all pipeline outputs can be casted to a string, we will
-            # create our own output based on the properties if that is the
-            # case+
-            try:
-                output_msg = str(output)
-            except TypeError:
-                if isinstance(output, GenericComplexObject):
-                    obj_lines = output.property_sets
-                    for key, value in output.adapted_properties.items():
-                        obj_lines.append("%s: %s" % (key, value))
-                    for key, value in output.extended_properties.items():
-                        obj_lines.append("%s: %s" % (key, value))
-                    output_msg = "\n".join(obj_lines)
-                else:
-                    output_msg = ""
+            # Not all pipeline outputs are a string or contain a __str__ value,
+            # we will create our own output based on the properties of the
+            # complex object if that is the case.
+            if isinstance(output, GenericComplexObject) and output.to_string is None:
+                obj_lines = output.property_sets
+                for key, value in output.adapted_properties.items():
+                    obj_lines.append(u"%s: %s" % (key, value))
+                for key, value in output.extended_properties.items():
+                    obj_lines.append(u"%s: %s" % (key, value))
+                output_msg = u"\n".join(obj_lines)
+            else:
+                output_msg = to_text(output, nonstring='simplerepr')
+
             stdout_list.append(output_msg)
 
-        stdout = "\r\n".join(stdout_list)
+        stdout = u"\r\n".join(stdout_list)
         if len(self.host.ui.stdout) > 0:
-            stdout += "\r\n" + "".join(self.host.ui.stdout)
+            stdout += u"\r\n" + u"".join(self.host.ui.stdout)
 
         stderr_list = []
         for error in pipeline.streams.error:
@@ -597,4 +597,4 @@ if ($bytes_read -gt 0) {
         self.host.ui.stdout = []
         self.host.ui.stderr = []
 
-        return rc, stdout, stderr
+        return rc, to_bytes(stdout, encoding='utf-8'), to_bytes(stderr, encoding='utf-8')

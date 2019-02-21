@@ -429,7 +429,7 @@ class VariableManager:
         # if we have a task and we're delegating to another host, figure out the
         # variables for that host now so we don't have to rely on hostvars later
         if task and task.delegate_to is not None and include_delegate_to:
-            all_vars['ansible_delegated_vars'] = self._get_delegated_vars(play, task, all_vars)
+            all_vars['ansible_delegated_vars'], all_vars['_ansible_loop_cache'] = self._get_delegated_vars(play, task, all_vars)
 
         # 'vars' magic var
         if task or play:
@@ -489,7 +489,7 @@ class VariableManager:
     def _get_delegated_vars(self, play, task, existing_variables):
         if not hasattr(task, 'loop'):
             # This "task" is not a Task, so we need to skip it
-            return {}
+            return {}, None
 
         # we unfortunately need to template the delegate_to field here,
         # as we're fetching vars before post_validate has been called on
@@ -594,16 +594,15 @@ class VariableManager:
                 include_hostvars=False,
             )
 
+        _ansible_loop_cache = None
         if has_loop and cache_items:
-            # delegate_to templating produced a change, update task.loop with templated items,
+            # delegate_to templating produced a change, so we will cache the templated items
+            # in a special private hostvar
             # this ensures that delegate_to+loop doesn't produce different results than TaskExecutor
             # which may reprocess the loop
-            # Set loop_with to None, so we don't do extra unexpected processing on the cached items later
-            # in TaskExecutor
-            task.loop_with = None
-            task.loop = items
+            _ansible_loop_cache = items
 
-        return delegated_host_vars
+        return delegated_host_vars, _ansible_loop_cache
 
     def clear_facts(self, hostname):
         '''
@@ -623,10 +622,21 @@ class VariableManager:
         if host.name not in self._fact_cache:
             self._fact_cache[host.name] = facts
         else:
-            try:
-                self._fact_cache.update(host.name, facts)
-            except KeyError:
-                self._fact_cache[host.name] = facts
+            if isinstance(self._fact_cache, FactCache):
+                try:
+                    self._fact_cache.update(host.name, facts)
+                except KeyError:
+                    self._fact_cache[host.name] = facts
+            else:
+                # Dictionary fallback so we need to use a dictionary update.
+                try:
+                    host_cache = self._fact_cache[host.name]
+                except KeyError:
+                    host_cache = facts
+                else:
+                    host_cache.update(facts)
+
+                self._fact_cache[host.name] = host_cache
 
     def set_nonpersistent_facts(self, host, facts):
         '''

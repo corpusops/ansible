@@ -157,13 +157,14 @@ facts:
     sample: {}
 '''
 
-from ansible.module_utils.docker_common import AnsibleDockerClient, DockerBaseClass, HAS_DOCKER_PY_2, HAS_DOCKER_PY_3
+from ansible.module_utils.docker_common import AnsibleDockerClient, DockerBaseClass, HAS_DOCKER_PY_2, HAS_DOCKER_PY_3, clean_dict_booleans_for_docker_api
 
 try:
     from docker import utils
+    from docker.errors import NotFound
     if HAS_DOCKER_PY_2 or HAS_DOCKER_PY_3:
         from docker.types import IPAMPool, IPAMConfig
-except:
+except Exception as dummy:
     # missing docker-py handled in ansible.module_utils.docker_common
     pass
 
@@ -208,6 +209,9 @@ class DockerNetworkManager(object):
         if not self.parameters.connected and self.existing_network:
             self.parameters.connected = container_names_in_network(self.existing_network)
 
+        if self.parameters.driver_options:
+            self.parameters.driver_options = clean_dict_booleans_for_docker_api(self.parameters.driver_options)
+
         state = self.parameters.state
         if state == 'present':
             self.present()
@@ -215,14 +219,10 @@ class DockerNetworkManager(object):
             self.absent()
 
     def get_existing_network(self):
-        networks = self.client.networks(names=[self.parameters.network_name])
-        # check if a user is trying to find network by its Id
-        if not networks:
-            networks = self.client.networks(ids=[self.parameters.network_name])
-        if not networks:
+        try:
+            return self.client.inspect_network(self.parameters.network_name)
+        except NotFound:
             return None
-        else:
-            return networks[0]
 
     def has_different_config(self, net):
         '''
@@ -257,6 +257,10 @@ class DockerNetworkManager(object):
             else:
                 for key, value in self.parameters.ipam_options.items():
                     camelkey = None
+                    if value is None:
+                        # due to recursive argument_spec, all keys are always present
+                        # (but have default value None if not specified)
+                        continue
                     for net_key in net['IPAM']['Config'][0]:
                         if key == net_key.lower():
                             camelkey = net_key
@@ -274,7 +278,8 @@ class DockerNetworkManager(object):
     def create_network(self):
         if not self.existing_network:
             ipam_pools = []
-            if self.parameters.ipam_options:
+            if (self.parameters.ipam_options['subnet'] or self.parameters.ipam_options['iprange'] or
+                    self.parameters.ipam_options['gateway'] or self.parameters.ipam_options['aux_addresses']):
                 if HAS_DOCKER_PY_2 or HAS_DOCKER_PY_3:
                     ipam_pools.append(IPAMPool(**self.parameters.ipam_options))
                 else:
@@ -370,20 +375,26 @@ class DockerNetworkManager(object):
 def main():
     argument_spec = dict(
         network_name=dict(type='str', required=True, aliases=['name']),
-        connected=dict(type='list', default=[], aliases=['containers']),
+        connected=dict(type='list', default=[], aliases=['containers'], elements='str'),
         state=dict(type='str', default='present', choices=['present', 'absent']),
         driver=dict(type='str', default='bridge'),
         driver_options=dict(type='dict', default={}),
         force=dict(type='bool', default=False),
         appends=dict(type='bool', default=False, aliases=['incremental']),
-        ipam_driver=dict(type='str', default=None),
-        ipam_options=dict(type='dict', default={}),
+        ipam_driver=dict(type='str'),
+        ipam_options=dict(type='dict', default={}, options=dict(
+            subnet=dict(type='str'),
+            iprange=dict(type='str'),
+            gateway=dict(type='str'),
+            aux_addresses=dict(type='dict'),
+        )),
         debug=dict(type='bool', default=False)
     )
 
     client = AnsibleDockerClient(
         argument_spec=argument_spec,
         supports_check_mode=True
+        # "The docker server >= 1.9.0"
     )
 
     cm = DockerNetworkManager(client)

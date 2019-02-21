@@ -860,6 +860,8 @@ def build_network_spec(params, ec2=None):
                 ec2=ec2
             )
             spec['Groups'] = [g['GroupId'] for g in groups]
+        if network.get('description') is not None:
+            spec['Description'] = network['description']
         # TODO more special snowflake network things
 
         return [spec]
@@ -1054,7 +1056,10 @@ def build_top_level_options(params):
         spec['CreditSpecification'] = {'CpuCredits': params.get('cpu_credit_specification')}
     if params.get('tenancy') is not None:
         spec['Placement'] = {'Tenancy': params.get('tenancy')}
-    if (params.get('network') or {}).get('ebs_optimized') is not None:
+    if params.get('ebs_optimized') is not None:
+        spec['EbsOptimized'] = params.get('ebs_optimized')
+    elif (params.get('network') or {}).get('ebs_optimized') is not None:
+        # Backward compatibility for workaround described in https://github.com/ansible/ansible/issues/48159
         spec['EbsOptimized'] = params['network'].get('ebs_optimized')
     if params.get('instance_initiated_shutdown_behavior'):
         spec['InstanceInitiatedShutdownBehavior'] = params.get('instance_initiated_shutdown_behavior')
@@ -1112,6 +1117,11 @@ def await_instances(ids, state='OK'):
     if not module.params.get('wait', True):
         # the user asked not to wait for anything
         return
+
+    if module.check_mode:
+        # In check mode, there is no change even if you wait.
+        return
+
     state_opts = {
         'OK': 'instance_status_ok',
         'STOPPED': 'instance_stopped',
@@ -1344,6 +1354,10 @@ def change_instance_state(filters, desired_state, ec2=None):
     for inst in instances:
         try:
             if desired_state == 'TERMINATED':
+                if module.check_mode:
+                    changed.add(inst['InstanceId'])
+                    continue
+
                 # TODO use a client-token to prevent double-sends of these start/stop/terminate commands
                 # https://docs.aws.amazon.com/AWSEC2/latest/APIReference/Run_Instance_Idempotency.html
                 resp = ec2.terminate_instances(InstanceIds=[inst['InstanceId']])
@@ -1352,9 +1366,18 @@ def change_instance_state(filters, desired_state, ec2=None):
                 if inst['State']['Name'] == 'stopping':
                     unchanged.add(inst['InstanceId'])
                     continue
+
+                if module.check_mode:
+                    changed.add(inst['InstanceId'])
+                    continue
+
                 resp = ec2.stop_instances(InstanceIds=[inst['InstanceId']])
                 [changed.add(i['InstanceId']) for i in resp['StoppingInstances']]
             if desired_state == 'RUNNING':
+                if module.check_mode:
+                    changed.add(inst['InstanceId'])
+                    continue
+
                 resp = ec2.start_instances(InstanceIds=[inst['InstanceId']])
                 [changed.add(i['InstanceId']) for i in resp['StartingInstances']]
         except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError):
@@ -1423,6 +1446,12 @@ def ensure_present(existing_matches, changed, ec2, state):
             )
     try:
         instance_spec = build_run_instance_spec(module.params)
+        # If check mode is enabled,suspend 'ensure function'.
+        if module.check_mode:
+            module.exit_json(
+                changed=True,
+                spec=instance_spec,
+            )
         instance_response = run_instances(ec2, **instance_spec)
         instances = instance_response['Instances']
         instance_ids = [i['InstanceId'] for i in instances]
@@ -1516,6 +1545,9 @@ def main():
     )
 
     if module.params.get('network'):
+        if 'ebs_optimized' in module.params['network']:
+            module.deprecate("network.ebs_optimized is deprecated."
+                             "Use the top level ebs_optimized parameter instead", 2.9)
         if module.params.get('network').get('interfaces'):
             if module.params.get('security_group'):
                 module.fail_json(msg="Parameter network.interfaces can't be used with security_group")
@@ -1565,7 +1597,7 @@ def main():
         module.params['filters'] = filters
 
     if module.params.get('cpu_options') and not module.botocore_at_least('1.10.16'):
-            module.fail_json(msg="cpu_options is only supported with botocore >= 1.10.16")
+        module.fail_json(msg="cpu_options is only supported with botocore >= 1.10.16")
 
     existing_matches = find_instances(ec2, filters=module.params.get('filters'))
     changed = False

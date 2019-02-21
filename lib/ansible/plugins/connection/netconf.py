@@ -140,6 +140,8 @@ options:
         key: connect_timeout
     env:
       - name: ANSIBLE_PERSISTENT_CONNECT_TIMEOUT
+    vars:
+      - name: ansible_connect_timeout
   persistent_command_timeout:
     type: int
     description:
@@ -187,8 +189,9 @@ try:
     from ncclient.operations import RPCError
     from ncclient.transport.errors import SSHUnknownHostError
     from ncclient.xml_ import to_ele, to_xml
+    HAS_NCCLIENT = True
 except ImportError:
-    raise AnsibleError("ncclient is not installed")
+    HAS_NCCLIENT = False
 
 try:
     from __main__ import display
@@ -245,8 +248,13 @@ class Connection(NetworkConnectionBase):
             return super(Connection, self).exec_command(cmd, in_data, sudoable)
 
     def _connect(self):
-        super(Connection, self)._connect()
+        if not HAS_NCCLIENT:
+            raise AnsibleError(
+                'ncclient is required to use the netconf connection type.\n'
+                'Please run pip install ncclient'
+            )
 
+        super(Connection, self)._connect()
         display.display('ssh connection done, starting ncclient', log_only=True)
 
         allow_agent = True
@@ -274,9 +282,12 @@ class Connection(NetworkConnectionBase):
             ssh_config = None
 
         try:
+            port = self._play_context.port or 830
+            display.vvvv("ESTABLISH NETCONF SSH CONNECTION FOR USER: %s on PORT %s TO %s" %
+                         (self._play_context.remote_user, port, self._play_context.remote_addr))
             self._manager = manager.connect(
                 host=self._play_context.remote_addr,
-                port=self._play_context.port or 830,
+                port=port,
                 username=self._play_context.remote_user,
                 password=self._play_context.password,
                 key_filename=self.key_filename,

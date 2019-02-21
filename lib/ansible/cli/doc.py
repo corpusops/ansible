@@ -1,17 +1,5 @@
-# (c) 2014, James Tanner <tanner.jc@gmail.com>
-#
-# Ansible is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# Ansible is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright: (c) 2014, James Tanner <tanner.jc@gmail.com>
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
@@ -24,6 +12,7 @@ import traceback
 import yaml
 
 from collections import Sequence
+import ansible.plugins.loader as plugin_loader
 
 from ansible import constants as C
 from ansible.cli import CLI
@@ -33,8 +22,7 @@ from ansible.module_utils.six import string_types
 from ansible.parsing.metadata import extract_metadata
 from ansible.parsing.plugin_docs import read_docstub
 from ansible.parsing.yaml.dumper import AnsibleDumper
-from ansible.plugins.loader import module_loader, action_loader, lookup_loader, callback_loader, cache_loader, \
-    vars_loader, connection_loader, strategy_loader, inventory_loader, shell_loader, fragment_loader
+from ansible.plugins.loader import action_loader, fragment_loader
 from ansible.utils.plugin_docs import BLACKLIST, get_docstring
 
 try:
@@ -57,18 +45,6 @@ class DocCLI(CLI):
 
         super(DocCLI, self).__init__(args)
         self.plugin_list = set()
-
-        self.loader_map = {
-            'cache': cache_loader,
-            'callback': callback_loader,
-            'connection': connection_loader,
-            'lookup': lookup_loader,
-            'strategy': strategy_loader,
-            'vars': vars_loader,
-            'inventory': inventory_loader,
-            'shell': shell_loader,
-            'module': module_loader,
-        }
 
     def parse(self):
 
@@ -104,7 +80,11 @@ class DocCLI(CLI):
         super(DocCLI, self).run()
 
         plugin_type = self.options.type
-        loader = self.loader_map.get(plugin_type, self.loader_map['module'])
+
+        if plugin_type in C.DOCUMENTABLE_PLUGINS:
+            loader = getattr(plugin_loader, '%s_loader' % plugin_type)
+        else:
+            raise AnsibleOptionsError("Unknown or undocumentable plugin type: %s" % plugin_type)
 
         # add to plugin path from command line
         if self.options.module_path:
@@ -137,12 +117,12 @@ class DocCLI(CLI):
 
         # process all plugins of type
         if self.options.all_plugins:
-            self.args = self.get_all_plugins_of_type(plugin_type)
+            self.args = self.get_all_plugins_of_type(plugin_type, loader)
 
         # dump plugin metadata as JSON
         if self.options.json_dump:
             plugin_data = {}
-            for plugin_type in self.loader_map.keys():
+            for plugin_type in C.DOCUMENTABLE_PLUGINS:
                 plugin_data[plugin_type] = dict()
                 plugin_names = self.get_all_plugins_of_type(plugin_type)
                 for plugin_name in plugin_names:
@@ -171,7 +151,7 @@ class DocCLI(CLI):
         return 0
 
     def get_all_plugins_of_type(self, plugin_type):
-        loader = self.loader_map[plugin_type]
+        loader = getattr(plugin_loader, '%s_loader' % plugin_type)
         plugin_list = set()
         paths = loader._get_paths()
         for path in paths:
@@ -181,7 +161,7 @@ class DocCLI(CLI):
 
     def get_plugin_metadata(self, plugin_type, plugin_name):
         # if the plugin lives in a non-python file (eg, win_X.ps1), require the corresponding python file for docs
-        loader = self.loader_map[plugin_type]
+        loader = getattr(plugin_loader, '%s_loader' % plugin_type)
         filename = loader.find_plugin(plugin_name, mod_type='.py', ignore_deprecated=True, check_aliases=True)
         if filename is None:
             raise AnsibleError("unable to load {0} plugin named {1} ".format(plugin_type, plugin_name))
@@ -350,11 +330,12 @@ class DocCLI(CLI):
                 if not doc or not isinstance(doc, dict):
                     with open(filename) as f:
                         metadata = extract_metadata(module_data=f.read())
-                    if 'removed' not in metadata[0].get('status', []):
-                        desc = 'UNDOCUMENTED'
-                        display.warning("%s parsing did not produce documentation." % plugin)
-                    else:
-                        continue
+                    if metadata[0]:
+                        if 'removed' not in metadata[0].get('status', []):
+                            display.warning("%s parsing did not produce documentation." % plugin)
+                        else:
+                            continue
+                    desc = 'UNDOCUMENTED'
                 else:
                     desc = self.tty_ify(doc.get('short_description', 'INVALID SHORT DESCRIPTION').strip())
 
@@ -366,7 +347,7 @@ class DocCLI(CLI):
                 else:
                     text.append("%-*s %-*.*s" % (displace, plugin, linelimit, len(desc), desc))
             except Exception as e:
-                raise AnsibleError("Failed reading docs at %s: %s" % (plugin, to_native(e)))
+                raise AnsibleError("Failed reading docs at %s: %s" % (plugin, to_native(e)), orig_exc=e)
 
         if len(deprecated) > 0:
             text.append("\nDEPRECATED:")
@@ -395,7 +376,7 @@ class DocCLI(CLI):
                 text.append("%-*s %-*.*s" % (displace, plugin, linelimit, len(filename), filename))
 
             except Exception as e:
-                raise AnsibleError("Failed reading docs at %s: %s" % (plugin, to_native(e)))
+                raise AnsibleError("Failed reading docs at %s: %s" % (plugin, to_native(e)), orig_exc=e)
 
         return "\n".join(text)
 
@@ -587,7 +568,44 @@ class DocCLI(CLI):
             for note in doc['notes']:
                 text.append(textwrap.fill(CLI.tty_ify(note), limit - 6, initial_indent=opt_indent[:-2] + "* ", subsequent_indent=opt_indent))
             text.append('')
+            text.append('')
             del doc['notes']
+
+        if 'seealso' in doc and doc['seealso']:
+            text.append("SEE ALSO:")
+            for item in doc['seealso']:
+                if 'module' in item and 'description' in item:
+                    text.append(textwrap.fill(CLI.tty_ify('Module %s' % item['module']),
+                                limit - 6, initial_indent=opt_indent[:-2] + "* ", subsequent_indent=opt_indent))
+                    text.append(textwrap.fill(CLI.tty_ify(item['description']),
+                                limit - 6, initial_indent=opt_indent, subsequent_indent=opt_indent))
+                    text.append(textwrap.fill(CLI.tty_ify('https://docs.ansible.com/ansible/latest/modules/%s_module.html' % item['module']),
+                                limit - 6, initial_indent=opt_indent + '   ', subsequent_indent=opt_indent))
+                elif 'module' in item:
+                    text.append(textwrap.fill(CLI.tty_ify('Module %s' % item['module']),
+                                limit - 6, initial_indent=opt_indent[:-2] + "* ", subsequent_indent=opt_indent))
+                    text.append(textwrap.fill(CLI.tty_ify('The official documentation on the %s module.' % item['module']),
+                                limit - 6, initial_indent=opt_indent + '   ', subsequent_indent=opt_indent + '   '))
+                    text.append(textwrap.fill(CLI.tty_ify('https://docs.ansible.com/ansible/latest/modules/%s_module.html' % item['module']),
+                                limit - 6, initial_indent=opt_indent + '   ', subsequent_indent=opt_indent))
+                elif 'name' in item and 'link' in item and 'description' in item:
+                    text.append(textwrap.fill(CLI.tty_ify(item['name']),
+                                limit - 6, initial_indent=opt_indent[:-2] + "* ", subsequent_indent=opt_indent))
+                    text.append(textwrap.fill(CLI.tty_ify(item['description']),
+                                limit - 6, initial_indent=opt_indent + '   ', subsequent_indent=opt_indent + '   '))
+                    text.append(textwrap.fill(CLI.tty_ify(item['link']),
+                                limit - 6, initial_indent=opt_indent + '   ', subsequent_indent=opt_indent + '   '))
+                elif 'ref' in item and 'description' in item:
+                    text.append(textwrap.fill(CLI.tty_ify('Ansible documentation [%s]' % item['ref']),
+                                limit - 6, initial_indent=opt_indent[:-2] + "* ", subsequent_indent=opt_indent))
+                    text.append(textwrap.fill(CLI.tty_ify(item['description']),
+                                limit - 6, initial_indent=opt_indent + '   ', subsequent_indent=opt_indent + '   '))
+                    text.append(textwrap.fill(CLI.tty_ify('https://docs.ansible.com/ansible/latest/#stq=%s&stp=1' % item['ref']),
+                                limit - 6, initial_indent=opt_indent + '   ', subsequent_indent=opt_indent + '   '))
+
+            text.append('')
+            text.append('')
+            del doc['seealso']
 
         if 'requirements' in doc and doc['requirements'] is not None and len(doc['requirements']) > 0:
             req = ", ".join(doc.pop('requirements'))
@@ -608,14 +626,16 @@ class DocCLI(CLI):
 
         if 'plainexamples' in doc and doc['plainexamples'] is not None:
             text.append("EXAMPLES:")
+            text.append('')
             if isinstance(doc['plainexamples'], string_types):
                 text.append(doc.pop('plainexamples').strip())
             else:
                 text.append(yaml.dump(doc.pop('plainexamples'), indent=2, default_flow_style=False))
             text.append('')
+            text.append('')
 
         if 'returndocs' in doc and doc['returndocs'] is not None:
-            text.append("RETURN VALUES:\n")
+            text.append("RETURN VALUES:")
             if isinstance(doc['returndocs'], string_types):
                 text.append(doc.pop('returndocs'))
             else:

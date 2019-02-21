@@ -53,7 +53,7 @@ options:
     description:
     - Container hostname
     - Maps docker service --hostname option.
-    - Requires api_version >= 1.25
+    - Requires API version >= 1.25
   tty:
     required: false
     type: bool
@@ -61,28 +61,28 @@ options:
     description:
     - Allocate a pseudo-TTY
     - Maps docker service --tty option.
-    - Requires api_version >= 1.25
+    - Requires API version >= 1.25
   dns:
     required: false
     default: []
     description:
     - List of custom DNS servers.
     - Maps docker service --dns option.
-    - Requires api_version >= 1.25
+    - Requires API version >= 1.25
   dns_search:
     required: false
     default: []
     description:
     - List of custom DNS search domains.
     - Maps docker service --dns-search option.
-    - Requires api_version >= 1.25
+    - Requires API version >= 1.25
   dns_options:
     required: false
     default: []
     description:
     - List of custom DNS options.
     - Maps docker service --dns-option option.
-    - Requires api_version >= 1.25
+    - Requires API version >= 1.25
   force_update:
     required: false
     type: bool
@@ -90,24 +90,24 @@ options:
     description:
     - Force update even if no changes require it.
     - Maps to docker service update --force option.
-    - Requires api_version >= 1.25
+    - Requires API version >= 1.25
   labels:
     required: false
+    type: dict
     description:
-    - List of the service labels.
+    - Dictionary of key value pairs.
     - Maps docker service --label option.
   container_labels:
     required: false
+    type: dict
     description:
-    - List of the service containers labels.
+    - Dictionary of key value pairs.
     - Maps docker service --container-label option.
-    default: []
   endpoint_mode:
-    required: false
+    type: str
     description:
     - Service endpoint mode.
     - Maps docker service --endpoint-mode option.
-    default: vip
     choices:
     - vip
     - dnsrr
@@ -143,13 +143,21 @@ options:
     required: false
     default: 0
     description:
-    - Service memory limit in MB. 0 equals no limit.
+    - "Service memory limit (format: C(<number>[<unit>])). Number is a positive integer.
+      Unit can be C(B) (byte), C(K) (kibibyte, 1024B), C(M) (mebibyte), C(G) (gibibyte),
+      C(T) (tebibyte), or C(P) (pebibyte)."
+    - 0 equals no limit.
+    - Omitting the unit defaults to bytes.
     - Maps docker service --limit-memory option.
   reserve_memory:
     required: false
     default: 0
     description:
-    - Service memory reservation in MB. 0 equals no reservation.
+    - "Service memory reservation (format: C(<number>[<unit>])). Number is a positive integer.
+      Unit can be C(B) (byte), C(K) (kibibyte, 1024B), C(M) (mebibyte), C(G) (gibibyte),
+      C(T) (tebibyte), or C(P) (pebibyte)."
+    - 0 equals no reservation.
+    - Omitting the unit defaults to bytes.
     - Maps docker service --reserve-memory option.
   mode:
     required: false
@@ -170,6 +178,7 @@ options:
     - List of dictionaries describing the service secrets.
     - Every item must be a dictionary exposing the keys secret_id, secret_name, filename, uid (defaults to 0), gid (defaults to 0), mode (defaults to 0o444)
     - Maps docker service --secret option.
+    - Requires API version >= 1.25
     default: []
   configs:
     required: false
@@ -177,6 +186,7 @@ options:
     - List of dictionaries describing the service configs.
     - Every item must be a dictionary exposing the keys config_id, config_name, filename, uid (defaults to 0), gid (defaults to 0), mode (defaults to 0o444)
     - Maps docker service --config option.
+    - Requires API version >= 1.30
     default: []
   networks:
     required: false
@@ -191,6 +201,7 @@ options:
     - List of dictionaries describing the service published ports.
     - Every item must be a dictionary exposing the keys published_port, target_port, protocol (defaults to 'tcp'), mode <ingress|host>, default to ingress.
     - Only used with api_version >= 1.25
+    - If API version >= 1.32 and docker python library >= 3.0.0 attribute 'mode' can be set to 'ingress' or 'host' (default 'ingress').
   replicas:
     required: false
     default: -1
@@ -266,17 +277,25 @@ options:
     description:
     - Specifies the order of operations when rolling out an updated task.
     - Maps to docker service --update-order
+    - Requires API version >= 1.29
     choices:
     - stop-first
     - start-first
   user:
     required: false
     default: root
-    description: username or UID
+    description:
+    - username or UID.
+    - "If set to C(null) the image provided value (or the one already
+       set for the service) will be used"
 extends_documentation_fragment:
 - docker
 requirements:
 - "docker-py >= 2.0"
+- "Please note that the L(docker-py,https://pypi.org/project/docker-py/) Python
+   module has been superseded by L(docker,https://pypi.org/project/docker/)
+   (see L(here,https://github.com/docker/docker-py/issues/1310) for details).
+   Version 2.1.0 or newer is only available with the C(docker) module."
 '''
 
 RETURN = '''
@@ -454,6 +473,7 @@ EXAMPLES = '''
 import time
 from ansible.module_utils.docker_common import DockerBaseClass
 from ansible.module_utils.docker_common import AnsibleDockerClient
+from ansible.module_utils.docker_common import docker_version
 from ansible.module_utils.basic import human_to_bytes
 from ansible.module_utils._text import to_text
 
@@ -462,13 +482,7 @@ try:
     from distutils.version import LooseVersion
     from docker import utils
     from docker import types
-    from docker import __version__ as docker_version
-    if LooseVersion(docker_version) >= LooseVersion('2.0.0'):
-        from docker.types import Ulimit, LogConfig
-        HAS_DOCKER_PY_2 = True
-    else:
-        from docker.utils.types import Ulimit, LogConfig
-except:
+except Exception as dummy:
     # missing docker-py handled in ansible.module_utils.docker
     pass
 
@@ -479,7 +493,7 @@ class DockerService(DockerBaseClass):
         self.constraints = []
         self.image = ""
         self.args = []
-        self.endpoint_mode = "vip"
+        self.endpoint_mode = None
         self.dns = []
         self.hostname = ""
         self.tty = False
@@ -656,7 +670,7 @@ class DockerService(DockerBaseClass):
         differences = []
         needs_rebuild = False
         force_update = False
-        if self.endpoint_mode != os.endpoint_mode:
+        if self.endpoint_mode is not None and self.endpoint_mode != os.endpoint_mode:
             differences.append('endpoint_mode')
         if self.env != os.env:
             differences.append('env')
@@ -714,11 +728,11 @@ class DockerService(DockerBaseClass):
             differences.append('update_monitor')
         if self.update_max_failure_ratio != os.update_max_failure_ratio:
             differences.append('update_max_failure_ratio')
-        if self.update_order != os.update_order:
+        if self.update_order is not None and self.update_order != os.update_order:
             differences.append('update_order')
         if self.image != os.image.split('@')[0]:
             differences.append('image')
-        if self.user != os.user:
+        if self.user and self.user != os.user:
             differences.append('user')
         if self.dns != os.dns:
             differences.append('dns')
@@ -839,7 +853,7 @@ class DockerService(DockerBaseClass):
             network_id = None
             try:
                 network_id = filter(lambda n: n['name'] == network_name, docker_networks)[0]['id']
-            except:
+            except Exception as dummy:
                 pass
             if network_id:
                 networks.append({'Target': network_id})
@@ -865,7 +879,16 @@ class DockerServiceManager():
         return [{'name': n['Name'], 'id': n['Id']} for n in self.client.networks()]
 
     def get_service(self, name):
-        raw_data = self.client.services(filters={'name': name})
+        # The Docker API allows filtering services by name but the filter looks
+        # for a substring match, not an exact match. (Filtering for "foo" would
+        # return information for services "foobar" and "foobuzz" even if the
+        # service "foo" doesn't exist.) Avoid incorrectly determining that a
+        # service is present by filtering the list of services returned from the
+        # Docker API so that the name must be an exact match.
+        raw_data = [
+            service for service in self.client.services(filters={'name': name})
+            if service['Spec']['Name'] == name
+        ]
         if len(raw_data) == 0:
             return None
 
@@ -907,17 +930,15 @@ class DockerServiceManager():
             ds.restart_policy_attempts = restart_policy_data.get('MaxAttempts')
             ds.restart_policy_window = restart_policy_data.get('Window')
 
-        raw_data_endpoint = raw_data.get('Endpoint', None)
-        if raw_data_endpoint:
-            raw_data_endpoint_spec = raw_data_endpoint.get('Spec', None)
-            if raw_data_endpoint_spec:
-                ds.endpoint_mode = raw_data_endpoint_spec.get('Mode', 'vip')
-                for port in raw_data_endpoint_spec.get('Ports', []):
-                    ds.publish.append({
-                        'protocol': port['Protocol'],
-                        'mode': port.get('PublishMode', 'ingress'),
-                        'published_port': int(port['PublishedPort']),
-                        'target_port': int(port['TargetPort'])})
+        raw_data_endpoint_spec = raw_data['Spec'].get('EndpointSpec')
+        if raw_data_endpoint_spec:
+            ds.endpoint_mode = raw_data_endpoint_spec.get('Mode')
+            for port in raw_data_endpoint_spec.get('Ports', []):
+                ds.publish.append({
+                    'protocol': port['Protocol'],
+                    'mode': port.get('PublishMode', None),
+                    'published_port': int(port['PublishedPort']),
+                    'target_port': int(port['TargetPort'])})
 
         if 'Resources' in task_template_data.keys():
             if 'Limits' in task_template_data['Resources'].keys():
@@ -1033,10 +1054,11 @@ class DockerServiceManager():
                          % (pv['param'], pv['min_version'])))
 
         for publish_def in self.client.module.params.get('publish', []):
-            if ('mode' in publish_def.keys() and
-                    (LooseVersion(self.client.version()['ApiVersion']) <
-                     LooseVersion('1.25'))):
-                self.client.module.fail_json(msg='publish.mode parameter supported only with api_version>=1.25')
+            if 'mode' in publish_def.keys():
+                if LooseVersion(self.client.version()['ApiVersion']) < LooseVersion('1.25'):
+                    self.client.module.fail_json(msg='publish.mode parameter supported only with api_version>=1.25')
+                if LooseVersion(docker_version) < LooseVersion('3.0.0'):
+                    self.client.module.fail_json(msg='publish.mode parameter requires docker python library>=3.0.0')
 
     def run(self):
         self.test_parameter_versions()
@@ -1137,7 +1159,7 @@ def main():
         container_labels=dict(default={}, type='dict'),
         mode=dict(default="replicated"),
         replicas=dict(default=-1, type='int'),
-        endpoint_mode=dict(default='vip', choices=['vip', 'dnsrr']),
+        endpoint_mode=dict(default=None, choices=['vip', 'dnsrr']),
         restart_policy=dict(default='none', choices=['none', 'on-failure', 'any']),
         limit_cpu=dict(default=0, type='float'),
         limit_memory=dict(default=0, type='str'),
@@ -1159,14 +1181,9 @@ def main():
     client = AnsibleDockerClient(
         argument_spec=argument_spec,
         required_if=required_if,
-        supports_check_mode=True
+        supports_check_mode=True,
+        min_docker_version='2.0.0',
     )
-
-    if not HAS_DOCKER_PY_2:
-        client.module.fail_json(
-            msg=("docker python library version is %s. " +
-                 "this module requires version 2.0.0 or greater")
-            % docker_version)
 
     dsm = DockerServiceManager(client)
     msg, changed, rebuilt, changes, facts = dsm.run()

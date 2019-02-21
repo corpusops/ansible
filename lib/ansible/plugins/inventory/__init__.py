@@ -171,8 +171,13 @@ class BaseInventoryPlugin(AnsiblePlugin):
                  So only call this base class if you expect it to be a file.
         '''
 
+        valid = False
         b_path = to_bytes(path, errors='surrogate_or_strict')
-        return (os.path.exists(b_path) and os.access(b_path, os.R_OK))
+        if (os.path.exists(b_path) and os.access(b_path, os.R_OK)):
+            valid = True
+        else:
+            self.display.vvv('Skipping due to inventory source not existing or not being readable by the current user')
+        return valid
 
     def _populate_host_vars(self, hosts, variables, group=None, port=None):
         if not isinstance(variables, Mapping):
@@ -246,7 +251,7 @@ class Cacheable(object):
     _cache = {}
 
     def get_cache_key(self, path):
-        return "{0}_{1}_{2}".format(self.NAME, self._get_cache_prefix(path), self._get_config_identifier(path))
+        return "{0}_{1}".format(self.NAME, self._get_cache_prefix(path))
 
     def _get_cache_prefix(self, path):
         ''' create predictable unique prefix for plugin/inventory '''
@@ -260,11 +265,6 @@ class Cacheable(object):
         d2 = n.hexdigest()
 
         return 's_'.join([d1[:5], d2[:5]])
-
-    def _get_config_identifier(self, path):
-        ''' create predictable config-specific prefix for plugin/inventory '''
-
-        return hashlib.md5(path.encode()).hexdigest()
 
     def clear_cache(self):
         self._cache = {}
