@@ -477,6 +477,7 @@ from ansible.module_utils.docker_common import docker_version
 from ansible.module_utils.basic import human_to_bytes
 from ansible.module_utils._text import to_text
 
+from ansible.module_utils.common._collections_compat import Mapping
 
 try:
     from distutils.version import LooseVersion
@@ -897,18 +898,20 @@ class DockerServiceManager():
         ds = DockerService()
 
         task_template_data = raw_data['Spec']['TaskTemplate']
-        update_config_data = raw_data['Spec']['UpdateConfig']
 
         ds.image = task_template_data['ContainerSpec']['Image']
         ds.user = task_template_data['ContainerSpec'].get('User', 'root')
         ds.env = task_template_data['ContainerSpec'].get('Env', [])
         ds.args = task_template_data['ContainerSpec'].get('Args', [])
-        ds.update_delay = update_config_data['Delay']
-        ds.update_parallelism = update_config_data['Parallelism']
-        ds.update_failure_action = update_config_data['FailureAction']
-        ds.update_monitor = update_config_data['Monitor']
-        ds.update_max_failure_ratio = update_config_data['MaxFailureRatio']
-        ds.update_order = update_config_data['Order']
+
+        update_config_data = raw_data['Spec'].get('UpdateConfig')
+        if update_config_data:
+            ds.update_delay = update_config_data['Delay']
+            ds.update_parallelism = update_config_data['Parallelism']
+            ds.update_failure_action = update_config_data['FailureAction']
+            ds.update_monitor = update_config_data['Monitor']
+            ds.update_max_failure_ratio = update_config_data['MaxFailureRatio']
+            ds.update_order = update_config_data['Order']
 
         dns_config = task_template_data['ContainerSpec'].get('DNSConfig', None)
         if dns_config:
@@ -1053,7 +1056,9 @@ class DockerServiceManager():
                     msg=('%s parameter supported only with api_version>=%s'
                          % (pv['param'], pv['min_version'])))
 
-        for publish_def in self.client.module.params.get('publish', []):
+        for publish_def in params['publish'] or []:
+            if not isinstance(publish_def, Mapping):
+                self.client.module.fail_json(msg='The publish option must be provided with a list of dicts!')
             if 'mode' in publish_def.keys():
                 if LooseVersion(self.client.version()['ApiVersion']) < LooseVersion('1.25'):
                     self.client.module.fail_json(msg='publish.mode parameter supported only with api_version>=1.25')
