@@ -104,3 +104,8 @@ test "$(egrep -c 'Templating the path of the parent include_tasks failed.' test_
 # https://github.com/ansible/ansible/pull/35166
 ANSIBLE_STRATEGY='linear' ansible-playbook playbook/cached_role.yml -i inventory -v "$@"
 ANSIBLE_STRATEGY='free' ansible-playbook playbook/cached_role.yml -i inventory -v "$@"
+
+## Include role honour allow duplicates
+# https://github.com/ansible/ansible/pull/35164
+ANSIBLE_STRATEGY='linear' ansible-playbook playbook/honour_duplicates.yml -i inventory "$@"
+ANSIBLE_STRATEGY='free' ansible-playbook playbook/honour_duplicates.yml -i inventory "$@"

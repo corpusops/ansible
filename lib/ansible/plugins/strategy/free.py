@@ -225,6 +225,7 @@ class StrategyModule(StrategyBase):
                                 variable_manager=self._variable_manager,
                                 loader=self._loader,
                             )
+
                             # Prevent included tasks to run if already done
                             if new_ir._role and (
                                 new_ir._role.has_run(host) and
