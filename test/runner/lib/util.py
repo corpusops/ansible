@@ -39,8 +39,12 @@ except ImportError:
     from configparser import ConfigParser
 
 DOCKER_COMPLETION = {}
+COVERAGE_PATHS = {}  # type: dict[str, str]
 
-coverage_path = ''  # pylint: disable=locally-disabled, invalid-name
+try:
+    MAXFD = subprocess.MAXFD
+except AttributeError:
+    MAXFD = -1
 
 
 def get_docker_completion():
@@ -179,7 +183,7 @@ def generate_pip_command(python):
     return [python, '-m', 'pip.__main__']
 
 
-def intercept_command(args, cmd, target_name, capture=False, env=None, data=None, cwd=None, python_version=None, path=None):
+def intercept_command(args, cmd, target_name, capture=False, env=None, data=None, cwd=None, python_version=None, path=None, coverage=None):
     """
     :type args: TestConfig
     :type cmd: collections.Iterable[str]
@@ -190,16 +194,20 @@ def intercept_command(args, cmd, target_name, capture=False, env=None, data=None
     :type cwd: str | None
     :type python_version: str | None
     :type path: str | None
+    :type coverage: bool | None
     :rtype: str | None, str | None
     """
     if not env:
         env = common_environment()
 
+    if coverage is None:
+        coverage = args.coverage
+
     cmd = list(cmd)
-    inject_path = get_coverage_path(args)
-    config_path = os.path.join(inject_path, 'injector.json')
     version = python_version or args.python_version
     interpreter = find_python(version, path)
+    inject_path = get_coverage_path(args, interpreter)
+    config_path = os.path.join(inject_path, 'injector.json')
     coverage_file = os.path.abspath(os.path.join(inject_path, '..', 'output', '%s=%s=%s=%s=coverage' % (
         args.command, target_name, args.coverage_label or 'local-%s' % version, 'python-%s' % version)))
 
@@ -207,13 +215,13 @@ def intercept_command(args, cmd, target_name, capture=False, env=None, data=None
     env['ANSIBLE_TEST_PYTHON_VERSION'] = version
     env['ANSIBLE_TEST_PYTHON_INTERPRETER'] = interpreter
 
-    if args.coverage:
+    if coverage:
         env['_ANSIBLE_COVERAGE_CONFIG'] = os.path.join(inject_path, '.coveragerc')
         env['_ANSIBLE_COVERAGE_OUTPUT'] = coverage_file
 
     config = dict(
         python_interpreter=interpreter,
-        coverage_file=coverage_file if args.coverage else None,
+        coverage_file=coverage_file if coverage else None,
     )
 
     if not args.explain:
@@ -223,12 +231,13 @@ def intercept_command(args, cmd, target_name, capture=False, env=None, data=None
     return run_command(args, cmd, capture=capture, env=env, data=data, cwd=cwd)
 
 
-def get_coverage_path(args):
+def get_coverage_path(args, interpreter):
     """
     :type args: TestConfig
+    :type interpreter: str
     :rtype: str
     """
-    global coverage_path  # pylint: disable=locally-disabled, global-statement, invalid-name
+    coverage_path = COVERAGE_PATHS.get(interpreter)
 
     if coverage_path:
         return os.path.join(coverage_path, 'coverage')
@@ -255,13 +264,27 @@ def get_coverage_path(args):
         os.mkdir(os.path.join(coverage_path, directory))
         os.chmod(os.path.join(coverage_path, directory), stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
 
-    atexit.register(cleanup_coverage_dir)
+    os.symlink(interpreter, os.path.join(coverage_path, 'coverage', 'python'))
+
+    if not COVERAGE_PATHS:
+        atexit.register(cleanup_coverage_dirs)
+
+    COVERAGE_PATHS[interpreter] = coverage_path
 
     return os.path.join(coverage_path, 'coverage')
 
 
-def cleanup_coverage_dir():
-    """Copy over coverage data from temporary directory and purge temporary directory."""
+def cleanup_coverage_dirs():
+    """Clean up all coverage directories."""
+    for path in COVERAGE_PATHS.values():
+        display.info('Cleaning up coverage directory: %s' % path, verbosity=2)
+        cleanup_coverage_dir(path)
+
+
+def cleanup_coverage_dir(coverage_path):
+    """Copy over coverage data from temporary directory and purge temporary directory.
+    :type coverage_path: str
+    """
     output_dir = os.path.join(coverage_path, 'output')
 
     for filename in os.listdir(output_dir):
@@ -361,23 +384,30 @@ def raw_command(cmd, capture=False, env=None, data=None, cwd=None, explain=False
         stderr = None
 
     start = time.time()
+    process = None
 
     try:
-        process = subprocess.Popen(cmd, env=env, stdin=stdin, stdout=stdout, stderr=stderr, cwd=cwd)
-    except OSError as ex:
-        if ex.errno == errno.ENOENT:
-            raise ApplicationError('Required program "%s" not found.' % cmd[0])
-        raise
+        try:
+            process = subprocess.Popen(cmd, env=env, stdin=stdin, stdout=stdout, stderr=stderr, cwd=cwd)
+        except OSError as ex:
+            if ex.errno == errno.ENOENT:
+                raise ApplicationError('Required program "%s" not found.' % cmd[0])
+            raise
 
-    if communicate:
-        encoding = 'utf-8'
-        data_bytes = data.encode(encoding, 'surrogateescape') if data else None
-        stdout_bytes, stderr_bytes = process.communicate(data_bytes)
-        stdout_text = stdout_bytes.decode(encoding, str_errors) if stdout_bytes else u''
-        stderr_text = stderr_bytes.decode(encoding, str_errors) if stderr_bytes else u''
-    else:
-        process.wait()
-        stdout_text, stderr_text = None, None
+        if communicate:
+            encoding = 'utf-8'
+            data_bytes = data.encode(encoding, 'surrogateescape') if data else None
+            stdout_bytes, stderr_bytes = process.communicate(data_bytes)
+            stdout_text = stdout_bytes.decode(encoding, str_errors) if stdout_bytes else u''
+            stderr_text = stderr_bytes.decode(encoding, str_errors) if stderr_bytes else u''
+        else:
+            process.wait()
+            stdout_text, stderr_text = None, None
+    finally:
+        if process and process.returncode is None:
+            process.kill()
+            display.info('')  # the process we're interrupting may have completed a partial line of output
+            display.notice('Killed command to avoid an orphaned child process during handling of an unexpected exception.')
 
     status = process.returncode
     runtime = time.time() - start
@@ -723,10 +753,13 @@ class MissingEnvironmentVariable(ApplicationError):
 
 class CommonConfig(object):
     """Configuration common to all commands."""
-    def __init__(self, args):
+    def __init__(self, args, command):
         """
         :type args: any
+        :type command: str
         """
+        self.command = command
+
         self.color = args.color  # type: bool
         self.explain = args.explain  # type: bool
         self.verbosity = args.verbosity  # type: int
@@ -737,6 +770,8 @@ class CommonConfig(object):
         if is_shippable():
             self.redact = True
 
+        self.cache = {}
+
 
 def docker_qualify_image(name):
     """
@@ -746,6 +781,29 @@ def docker_qualify_image(name):
     config = get_docker_completion().get(name, {})
 
     return config.get('name', name)
+
+
+@contextlib.contextmanager
+def named_temporary_file(args, prefix, suffix, directory, content):
+    """
+    :param args: CommonConfig
+    :param prefix: str
+    :param suffix: str
+    :param directory: str
+    :param content: str | bytes | unicode
+    :rtype: str
+    """
+    if not isinstance(content, bytes):
+        content = content.encode('utf-8')
+
+    if args.explain:
+        yield os.path.join(directory, '%stemp%s' % (prefix, suffix))
+    else:
+        with tempfile.NamedTemporaryFile(prefix=prefix, suffix=suffix, dir=directory) as tempfile_fd:
+            tempfile_fd.write(content)
+            tempfile_fd.flush()
+
+            yield tempfile_fd.name
 
 
 def parse_to_list_of_dict(pattern, value):

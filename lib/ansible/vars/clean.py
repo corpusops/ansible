@@ -12,12 +12,9 @@ from ansible import constants as C
 from ansible.module_utils._text import to_text
 from ansible.module_utils import six
 from ansible.plugins.loader import connection_loader
+from ansible.utils.display import Display
 
-try:
-    from __main__ import display
-except ImportError:
-    from ansible.utils.display import Display
-    display = Display()
+display = Display()
 
 
 def module_response_deepcopy(v):
@@ -98,6 +95,11 @@ def remove_internal_keys(data):
     for key in ['warnings', 'deprecations']:
         if key in data and not data[key]:
             del data[key]
+
+    # cleanse fact values that are allowed from actions but not modules
+    for key in list(data.get('ansible_facts', {}).keys()):
+        if key.startswith('discovered_interpreter_') or key.startswith('ansible_discovered_interpreter_'):
+            del data['ansible_facts'][key]
 
 
 def clean_facts(facts):

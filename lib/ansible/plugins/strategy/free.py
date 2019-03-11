@@ -40,13 +40,9 @@ from ansible.plugins.loader import action_loader
 from ansible.plugins.strategy import StrategyBase
 from ansible.template import Templar
 from ansible.module_utils._text import to_text
+from ansible.utils.display import Display
 
-
-try:
-    from __main__ import display
-except ImportError:
-    from ansible.utils.display import Display
-    display = Display()
+display = Display()
 
 
 class StrategyModule(StrategyBase):
@@ -141,7 +137,7 @@ class StrategyModule(StrategyBase):
                         try:
                             task.name = to_text(templar.template(task.name, fail_on_undefined=False), nonstring='empty')
                             display.debug("done templating", host=host_name)
-                        except:
+                        except Exception:
                             # just ignore any errors during task name templating,
                             # we don't care if it just shows the raw name
                             display.debug("templating failed for some reason", host=host_name)
@@ -229,7 +225,6 @@ class StrategyModule(StrategyBase):
                                 variable_manager=self._variable_manager,
                                 loader=self._loader,
                             )
-
                             # Prevent included tasks to run if already done
                             if new_ir._role and (
                                 new_ir._role.has_run(host) and
@@ -237,18 +232,17 @@ class StrategyModule(StrategyBase):
                             ):
                                 display.debug("ir: '%s' skipped because role has already run" % new_ir)
                                 new_blocks, handler_blocks = [], []
-                            self._tqm.update_handler_list([handler for handler_block in handler_blocks for handler in handler_block.block])
                         else:
                             new_blocks = self._load_included_file(included_file, iterator=iterator)
                     except AnsibleError as e:
                         for host in included_file._hosts:
                             iterator.mark_host_failed(host)
-                        display.warning(str(e))
+                        display.warning(to_text(e))
                         continue
 
                     for new_block in new_blocks:
-                        task_vars = self._variable_manager.get_vars(play=iterator._play, task=included_file._task)
-                        final_block = new_block.filter_tagged_tasks(play_context, task_vars)
+                        task_vars = self._variable_manager.get_vars(play=iterator._play, task=new_block._parent)
+                        final_block = new_block.filter_tagged_tasks(task_vars)
                         for host in hosts_left:
                             if host in included_file._hosts:
                                 all_blocks[host].append(final_block)

@@ -122,6 +122,11 @@ def command_coverage_combine(args):
                 new_name = re.sub('^(/.*?)?/root/ansible/', root_path, filename)
                 display.info('%s -> %s' % (filename, new_name), verbosity=3)
                 filename = new_name
+            elif '/.ansible/test/tmp/' in filename:
+                # Rewrite the path of code running from an integration test temporary directory.
+                new_name = re.sub(r'^.*/\.ansible/test/tmp/[^/]+/', root_path, filename)
+                display.info('%s -> %s' % (filename, new_name), verbosity=3)
+                filename = new_name
 
             if group not in groups:
                 groups[group] = {}
@@ -134,6 +139,8 @@ def command_coverage_combine(args):
             arc_data[filename].update(arcs)
 
     output_files = []
+    invalid_path_count = 0
+    invalid_path_chars = 0
 
     for group in sorted(groups):
         arc_data = groups[group]
@@ -142,7 +149,12 @@ def command_coverage_combine(args):
 
         for filename in arc_data:
             if not os.path.isfile(filename):
-                display.warning('Invalid coverage path: %s' % filename)
+                invalid_path_count += 1
+                invalid_path_chars += len(filename)
+
+                if args.verbosity > 1:
+                    display.warning('Invalid coverage path: %s' % filename)
+
                 continue
 
             updated.add_arcs({filename: list(arc_data[filename])})
@@ -154,6 +166,9 @@ def command_coverage_combine(args):
             output_file = COVERAGE_FILE + group
             updated.write_file(output_file)
             output_files.append(output_file)
+
+    if invalid_path_count > 0:
+        display.warning('Ignored %d characters from %d invalid coverage path(s).' % (invalid_path_chars, invalid_path_count))
 
     return sorted(output_files)
 
