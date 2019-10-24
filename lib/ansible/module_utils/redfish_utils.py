@@ -9,26 +9,32 @@ import re
 from ansible.module_utils.urls import open_url
 from ansible.module_utils.six.moves.urllib.error import URLError, HTTPError
 
-HEADERS = {'content-type': 'application/json'}
+GET_HEADERS = {'accept': 'application/json', 'OData-Version': '4.0'}
+POST_HEADERS = {'content-type': 'application/json', 'accept': 'application/json',
+                'OData-Version': '4.0'}
+PATCH_HEADERS = {'content-type': 'application/json', 'accept': 'application/json',
+                 'OData-Version': '4.0'}
+DELETE_HEADERS = {'accept': 'application/json', 'OData-Version': '4.0'}
 
 
 class RedfishUtils(object):
 
-    def __init__(self, creds, root_uri):
+    def __init__(self, creds, root_uri, timeout):
         self.root_uri = root_uri
         self.creds = creds
+        self.timeout = timeout
         self._init_session()
         return
 
     # The following functions are to send GET/POST/PATCH/DELETE requests
     def get_request(self, uri):
         try:
-            resp = open_url(uri, method="GET",
+            resp = open_url(uri, method="GET", headers=GET_HEADERS,
                             url_username=self.creds['user'],
                             url_password=self.creds['pswd'],
                             force_basic_auth=True, validate_certs=False,
                             follow_redirects='all',
-                            use_proxy=False)
+                            use_proxy=False, timeout=self.timeout)
             data = json.loads(resp.read())
         except HTTPError as e:
             return {'ret': False, 'msg': "HTTP Error: %s" % e.code}
@@ -39,15 +45,15 @@ class RedfishUtils(object):
             return {'ret': False, 'msg': "Unknown error"}
         return {'ret': True, 'data': data}
 
-    def post_request(self, uri, pyld, hdrs):
+    def post_request(self, uri, pyld):
         try:
             resp = open_url(uri, data=json.dumps(pyld),
-                            headers=hdrs, method="POST",
+                            headers=POST_HEADERS, method="POST",
                             url_username=self.creds['user'],
                             url_password=self.creds['pswd'],
                             force_basic_auth=True, validate_certs=False,
                             follow_redirects='all',
-                            use_proxy=False)
+                            use_proxy=False, timeout=self.timeout)
         except HTTPError as e:
             return {'ret': False, 'msg': "HTTP Error: %s" % e.code}
         except URLError as e:
@@ -57,15 +63,15 @@ class RedfishUtils(object):
             return {'ret': False, 'msg': "Unknown error"}
         return {'ret': True, 'resp': resp}
 
-    def patch_request(self, uri, pyld, hdrs):
+    def patch_request(self, uri, pyld):
         try:
             resp = open_url(uri, data=json.dumps(pyld),
-                            headers=hdrs, method="PATCH",
+                            headers=PATCH_HEADERS, method="PATCH",
                             url_username=self.creds['user'],
                             url_password=self.creds['pswd'],
                             force_basic_auth=True, validate_certs=False,
                             follow_redirects='all',
-                            use_proxy=False)
+                            use_proxy=False, timeout=self.timeout)
         except HTTPError as e:
             return {'ret': False, 'msg': "HTTP Error: %s" % e.code}
         except URLError as e:
@@ -75,15 +81,15 @@ class RedfishUtils(object):
             return {'ret': False, 'msg': "Unknown error"}
         return {'ret': True, 'resp': resp}
 
-    def delete_request(self, uri, pyld, hdrs):
+    def delete_request(self, uri, pyld):
         try:
             resp = open_url(uri, data=json.dumps(pyld),
-                            headers=hdrs, method="DELETE",
+                            headers=DELETE_HEADERS, method="DELETE",
                             url_username=self.creds['user'],
                             url_password=self.creds['pswd'],
                             force_basic_auth=True, validate_certs=False,
                             follow_redirects='all',
-                            use_proxy=False)
+                            use_proxy=False, timeout=self.timeout)
         except HTTPError as e:
             return {'ret': False, 'msg': "HTTP Error: %s" % e.code}
         except URLError as e:
@@ -265,7 +271,7 @@ class RedfishUtils(object):
             # Check to make sure option is available, otherwise error is ugly
             if "Actions" in _data:
                 if "#LogService.ClearLog" in _data[u"Actions"]:
-                    self.post_request(self.root_uri + _data[u"Actions"]["#LogService.ClearLog"]["target"], {}, HEADERS)
+                    self.post_request(self.root_uri + _data[u"Actions"]["#LogService.ClearLog"]["target"], {})
                     if response['ret'] is False:
                         return response
         return {'ret': True}
@@ -368,7 +374,7 @@ class RedfishUtils(object):
         action_uri = data[key]["#Manager.Reset"]["target"]
 
         payload = {'ResetType': 'GracefulRestart'}
-        response = self.post_request(self.root_uri + action_uri, payload, HEADERS)
+        response = self.post_request(self.root_uri + action_uri, payload)
         if response['ret'] is False:
             return response
         return {'ret': True}
@@ -397,7 +403,7 @@ class RedfishUtils(object):
         else:
             return {'ret': False, 'msg': 'Invalid Command'}
 
-        response = self.post_request(self.root_uri + action_uri, payload, HEADERS)
+        response = self.post_request(self.root_uri + action_uri, payload)
         if response['ret'] is False:
             return response
         result['ret'] = True
@@ -443,7 +449,7 @@ class RedfishUtils(object):
         roleid = {'RoleId': user['userrole']}
         enabled = {'Enabled': True}
         for payload in username, pswd, roleid, enabled:
-            response = self.patch_request(uri, payload, HEADERS)
+            response = self.patch_request(uri, payload)
             if response['ret'] is False:
                 return response
         return {'ret': True}
@@ -451,7 +457,7 @@ class RedfishUtils(object):
     def enable_user(self, user):
         uri = self.root_uri + self.accounts_uri + "/" + user['userid']
         payload = {'Enabled': True}
-        response = self.patch_request(uri, payload, HEADERS)
+        response = self.patch_request(uri, payload)
         if response['ret'] is False:
             return response
         return {'ret': True}
@@ -459,7 +465,7 @@ class RedfishUtils(object):
     def delete_user(self, user):
         uri = self.root_uri + self.accounts_uri + "/" + user['userid']
         payload = {'UserName': ""}
-        response = self.patch_request(uri, payload, HEADERS)
+        response = self.patch_request(uri, payload)
         if response['ret'] is False:
             return response
         return {'ret': True}
@@ -467,7 +473,7 @@ class RedfishUtils(object):
     def disable_user(self, user):
         uri = self.root_uri + self.accounts_uri + "/" + user['userid']
         payload = {'Enabled': False}
-        response = self.patch_request(uri, payload, HEADERS)
+        response = self.patch_request(uri, payload)
         if response['ret'] is False:
             return response
         return {'ret': True}
@@ -475,7 +481,7 @@ class RedfishUtils(object):
     def update_user_role(self, user):
         uri = self.root_uri + self.accounts_uri + "/" + user['userid']
         payload = {'RoleId': user['userrole']}
-        response = self.patch_request(uri, payload, HEADERS)
+        response = self.patch_request(uri, payload)
         if response['ret'] is False:
             return response
         return {'ret': True}
@@ -483,7 +489,7 @@ class RedfishUtils(object):
     def update_user_password(self, user):
         uri = self.root_uri + self.accounts_uri + "/" + user['userid']
         payload = {'Password': user['userpswd']}
-        response = self.patch_request(uri, payload, HEADERS)
+        response = self.patch_request(uri, payload)
         if response['ret'] is False:
             return response
         return {'ret': True}
@@ -522,6 +528,8 @@ class RedfishUtils(object):
 
         response = self.get_request(self.root_uri + self.manager_uri + "/" + key)
         if response['ret'] is False:
+            if '404' in response.get('msg'):
+                response['msg'] = 'The GetManagerAttributes command is not supported on this Redfish service'
             return response
         result['ret'] = True
         data = response['data']
@@ -654,7 +662,7 @@ class RedfishUtils(object):
         data = response['data']
         reset_bios_settings_uri = data["Actions"]["#Bios.ResetBios"]["target"]
 
-        response = self.post_request(self.root_uri + reset_bios_settings_uri, {}, HEADERS)
+        response = self.post_request(self.root_uri + reset_bios_settings_uri, {})
         if response['ret'] is False:
             return response
         return {'ret': True}
@@ -686,7 +694,7 @@ class RedfishUtils(object):
         else:
             payload = {"Boot": {"BootSourceOverrideTarget": bootdevice}}
 
-        response = self.patch_request(self.root_uri + self.systems_uri, payload, HEADERS)
+        response = self.patch_request(self.root_uri + self.systems_uri, payload)
         if response['ret'] is False:
             return response
         return {'ret': True}
@@ -702,10 +710,12 @@ class RedfishUtils(object):
             manager_attr = "{\"%s\": \"%s\"}" % (attr['mgr_attr_name'], attr['mgr_attr_value'])
 
         payload = {"Attributes": json.loads(manager_attr)}
-        response = self.patch_request(self.root_uri + self.manager_uri + "/" + attributes, payload, HEADERS)
+        response = self.patch_request(self.root_uri + self.manager_uri + "/" + attributes, payload)
         if response['ret'] is False:
+            if '404' in response.get('msg'):
+                response['msg'] = 'The SetManagerAttributes command is not supported on this Redfish service'
             return response
-        return {'ret': True}
+        return {'ret': True, 'changed': True, 'msg': "Modified Manager attribute"}
 
     def set_bios_attributes(self, attr):
         result = {}
@@ -743,7 +753,7 @@ class RedfishUtils(object):
         # Example: bios_attr = {\"name\":\"value\"}
         bios_attr = "{\"" + attr['bios_attr_name'] + "\":\"" + attr['bios_attr_value'] + "\"}"
         payload = {"Attributes": json.loads(bios_attr)}
-        response = self.patch_request(self.root_uri + set_bios_attr_uri, payload, HEADERS)
+        response = self.patch_request(self.root_uri + set_bios_attr_uri, payload)
         if response['ret'] is False:
             return response
         return {'ret': True, 'changed': True, 'msg': "Modified BIOS attribute"}
@@ -774,7 +784,7 @@ class RedfishUtils(object):
         set_bios_attr_uri = data["@Redfish.Settings"]["SettingsObject"]["@odata.id"]
 
         payload = {"TargetSettingsURI": set_bios_attr_uri}
-        response = self.post_request(self.root_uri + self.manager_uri + "/" + jobs, payload, HEADERS)
+        response = self.post_request(self.root_uri + self.manager_uri + "/" + jobs, payload)
         if response['ret'] is False:
             return response
 

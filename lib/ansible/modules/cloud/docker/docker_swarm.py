@@ -52,6 +52,7 @@ options:
       - Set to C(join), to join an existing cluster.
       - Set to C(absent), to leave an existing cluster.
       - Set to C(remove), to remove an absent node from the cluster.
+        Note that removing requires docker-py >= 2.4.0.
       - Set to C(inspect) to display swarm informations.
     type: str
     required: yes
@@ -399,6 +400,7 @@ class SwarmManager(DockerBaseClass):
 
         self.state = client.module.params['state']
         self.force = client.module.params['force']
+        self.node_id = client.module.params['node_id']
 
         self.parameters = TaskParameters.from_ansible_params(client)
 
@@ -515,7 +517,7 @@ class SwarmManager(DockerBaseClass):
 
     def __get_node_info(self):
         try:
-            node_info = self.client.inspect_node(node_id=self.parameters.node_id)
+            node_info = self.client.inspect_node(node_id=self.node_id)
         except APIError as exc:
             raise exc
         json_str = json.dumps(node_info, ensure_ascii=False)
@@ -524,10 +526,11 @@ class SwarmManager(DockerBaseClass):
 
     def __check_node_is_down(self):
         for _x in range(0, 5):
+            if _x > 0:
+                sleep(5)
             node_info = self.__get_node_info()
             if node_info['Status']['State'] == 'down':
                 return True
-            sleep(5)
         return False
 
     def remove(self):
@@ -544,11 +547,15 @@ class SwarmManager(DockerBaseClass):
 
         if not self.check_mode:
             try:
-                self.client.remove_node(node_id=self.parameters.node_id, force=self.force)
+                self.client.remove_node(node_id=self.node_id, force=self.force)
             except APIError as exc:
                 self.client.fail("Can not remove the node from the Swarm Cluster: %s" % to_native(exc))
         self.results['actions'].append("Node is removed from swarm cluster.")
         self.results['changed'] = True
+
+
+def _detect_remove_operation(client):
+    return client.module.params['state'] == 'remove'
 
 
 def main():
@@ -590,6 +597,11 @@ def main():
         ca_force_rotate=dict(docker_py_version='2.6.0', docker_api_version='1.30'),
         autolock_managers=dict(docker_py_version='2.6.0'),
         log_driver=dict(docker_py_version='2.6.0'),
+        remove_operation=dict(
+            docker_py_version='2.4.0',
+            detect_usage=_detect_remove_operation,
+            usage_msg='remove swarm nodes'
+        ),
     )
 
     client = AnsibleDockerClient(

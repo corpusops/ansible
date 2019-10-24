@@ -34,10 +34,10 @@ import time
 import uuid
 import yaml
 
-from collections import MutableMapping
+from collections import Mapping, MutableMapping
 import datetime
 from functools import partial
-from random import Random, SystemRandom, shuffle, random
+from random import Random, SystemRandom, shuffle, randint
 
 from jinja2.filters import environmentfilter, do_groupby as _do_groupby
 
@@ -64,7 +64,8 @@ UUID_NAMESPACE_ANSIBLE = uuid.UUID('361E6D51-FAEC-444A-9079-341386DA8E2E')
 
 def to_yaml(a, *args, **kw):
     '''Make verbose, human readable yaml'''
-    transformed = yaml.dump(a, Dumper=AnsibleDumper, allow_unicode=True, **kw)
+    default_flow_style = kw.pop('default_flow_style', None)
+    transformed = yaml.dump(a, Dumper=AnsibleDumper, allow_unicode=True, default_flow_style=default_flow_style, **kw)
     return to_text(transformed)
 
 
@@ -498,7 +499,7 @@ def dict_to_list_of_dict_key_value_elements(mydict):
     ''' takes a dictionary and transforms it into a list of dictionaries,
         with each having a 'key' and 'value' keys that correspond to the keys and values of the original '''
 
-    if not isinstance(mydict, MutableMapping):
+    if not isinstance(mydict, Mapping):
         raise AnsibleFilterError("dict2items requires a dictionary, got %s instead." % type(mydict))
 
     ret = []
@@ -542,8 +543,8 @@ def random_mac(value):
     if len(err):
         raise AnsibleFilterError('Invalid value (%s) for random_mac: %s' % (value, err))
 
-    # Generate random float and make it int
-    v = int(random() * 10.0**10)
+    # Generate random int between x1000000000 and xFFFFFFFFFF
+    v = randint(68719476736, 1099511627775)
     # Select first n chars to complement input prefix
     remain = 2 * (6 - len(mac_items))
     rnd = ('%x' % v)[:remain]

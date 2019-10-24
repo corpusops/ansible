@@ -56,7 +56,7 @@ options:
     privatekey_passphrase:
         required: false
         description:
-            - The passphrase for the privatekey.
+            - The passphrase for the private key.
         version_added: "2.4"
 extends_documentation_fragment: files
 '''
@@ -123,7 +123,6 @@ fingerprint:
       sha512: "fd:ed:5e:39:48:5f:9f:fe:7f:25:06:3f:79:08:cd:ee:a5:e7:b3:3d:13:82:87:1f:84:e1:f5:c7:28:77:53:94:86:56:38:69:f0:d9:35:22:01:1e:a6:60:...:0f:9b"
 '''
 
-import hashlib
 import os
 
 try:
@@ -136,7 +135,7 @@ else:
     pyopenssl_found = True
 
 from ansible.module_utils import crypto as crypto_utils
-from ansible.module_utils._text import to_native
+from ansible.module_utils._text import to_native, to_bytes
 from ansible.module_utils.basic import AnsibleModule
 
 
@@ -170,10 +169,13 @@ class PublicKey(crypto_utils.OpenSSLObject):
         if not self.check(module, perms_required=False) or self.force:
             try:
                 if self.format == 'OpenSSH':
-                    privatekey_content = open(self.privatekey_path, 'rb').read()
-                    key = crypto_serialization.load_pem_private_key(privatekey_content,
-                                                                    password=self.privatekey_passphrase,
-                                                                    backend=default_backend())
+                    with open(self.privatekey_path, 'rb') as private_key_fh:
+                        privatekey_content = private_key_fh.read()
+                    key = crypto_serialization.load_pem_private_key(
+                        privatekey_content,
+                        password=None if self.privatekey_passphrase is None else to_bytes(self.privatekey_passphrase),
+                        backend=default_backend()
+                    )
                     publickey_content = key.public_key().public_bytes(
                         crypto_serialization.Encoding.OpenSSH,
                         crypto_serialization.PublicFormat.OpenSSH
@@ -184,14 +186,12 @@ class PublicKey(crypto_utils.OpenSSLObject):
                     )
                     publickey_content = crypto.dump_publickey(crypto.FILETYPE_PEM, self.privatekey)
 
-                with open(self.path, 'wb') as publickey_file:
-                    publickey_file.write(publickey_content)
+                crypto_utils.write_file(module, publickey_content)
 
                 self.changed = True
             except (IOError, OSError) as exc:
                 raise PublicKeyError(exc)
             except AttributeError as exc:
-                self.remove()
                 raise PublicKeyError('You need to have PyOpenSSL>=16.0.0 to generate public keys')
 
         self.fingerprint = crypto_utils.get_fingerprint(

@@ -41,11 +41,12 @@ options:
     privatekey_path:
         required: true
         description:
-            - Path to the privatekey to use when signing the certificate signing request
+            - The path to the private key to use when signing the certificate signing request.
     privatekey_passphrase:
         required: false
         description:
-            - The passphrase for the privatekey.
+            - The passphrase for the private key.
+            - This is required if the private key is password protected.
     version:
         required: false
         default: 1
@@ -373,7 +374,11 @@ class CertificateSigningRequest(crypto_utils.OpenSSLObject):
                 if entry[1] is not None:
                     # Workaround for https://github.com/pyca/pyopenssl/issues/165
                     nid = OpenSSL._util.lib.OBJ_txt2nid(to_bytes(entry[0]))
-                    OpenSSL._util.lib.X509_NAME_add_entry_by_NID(subject._name, nid, OpenSSL._util.lib.MBSTRING_UTF8, to_bytes(entry[1]), -1, -1, 0)
+                    if nid == 0:
+                        raise CertificateSigningRequestError('Unknown subject field identifier "{0}"'.format(entry[0]))
+                    res = OpenSSL._util.lib.X509_NAME_add_entry_by_NID(subject._name, nid, OpenSSL._util.lib.MBSTRING_UTF8, to_bytes(entry[1]), -1, -1, 0)
+                    if res == 0:
+                        raise CertificateSigningRequestError('Invalid value for subject field identifier "{0}": {1}'.format(entry[0], entry[1]))
 
             extensions = []
             if self.subjectAltName:
@@ -409,13 +414,8 @@ class CertificateSigningRequest(crypto_utils.OpenSSLObject):
             req.sign(self.privatekey, self.digest)
             self.request = req
 
-            try:
-                csr_file = open(self.path, 'wb')
-                csr_file.write(crypto.dump_certificate_request(crypto.FILETYPE_PEM, self.request))
-                csr_file.close()
-            except (IOError, OSError) as exc:
-                raise CertificateSigningRequestError(exc)
-
+            result = crypto.dump_certificate_request(crypto.FILETYPE_PEM, self.request)
+            crypto_utils.write_file(module, result)
             self.changed = True
 
         file_args = module.load_file_common_arguments(module.params)

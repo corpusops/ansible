@@ -24,6 +24,7 @@ import copy
 from distutils.version import LooseVersion
 
 from ansible.module_utils.basic import AnsibleModule, env_fallback
+from ansible.module_utils.common._collections_compat import Mapping, Sequence
 from ansible.module_utils.six.moves.urllib.parse import urlparse
 from ansible.module_utils.parsing.convert_bool import BOOLEANS_TRUE, BOOLEANS_FALSE
 
@@ -442,7 +443,7 @@ class AnsibleDockerClient(Client):
             if not data['supported']:
                 # Test whether option is specified
                 if 'detect_usage' in data:
-                    used = data['detect_usage']()
+                    used = data['detect_usage'](self)
                 else:
                     used = self.module.params.get(option) is not None
                     if used and 'default' in self.module.argument_spec[option]:
@@ -588,6 +589,20 @@ class AnsibleDockerClient(Client):
         new_tag = self.find_image(name, tag)
 
         return new_tag, old_tag == new_tag
+
+    def report_warnings(self, result, warnings_key=None):
+        '''
+        Checks result of client operation for warnings, and if present, outputs them.
+        '''
+        if warnings_key is None:
+            warnings_key = ['Warnings']
+        for key in warnings_key:
+            if not isinstance(result, Mapping):
+                return
+            result = result.get(key)
+        if isinstance(result, Sequence):
+            for warning in result:
+                self.module.warn('Docker warning: {0}'.format(warning))
 
 
 def compare_dict_allow_more_present(av, bv):

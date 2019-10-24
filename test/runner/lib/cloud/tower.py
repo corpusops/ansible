@@ -101,6 +101,7 @@ class TowerCloudProvider(CloudProvider):
 
         aci = get_tower_aci(self.args, self.version)
         aci.start()
+        aci.wait()
 
         connection = aci.get()
 
@@ -115,6 +116,8 @@ class TowerCloudProvider(CloudProvider):
                 USERNAME=connection.username,
                 PASSWORD=connection.password,
             )
+
+            display.sensitive.add(values['PASSWORD'])
 
             config = self._populate_config_template(config, values)
 

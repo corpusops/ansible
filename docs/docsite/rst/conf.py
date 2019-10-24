@@ -55,8 +55,8 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General substitutions.
-project = 'Ansible Documentation'
-copyright = "2013-2018 Ansible, Inc"
+project = 'Ansible'
+copyright = "2019 Red Hat, Inc."
 
 # The default replacements for |version| and |release|, also used in various
 # other places throughout the built documents.
@@ -126,9 +126,23 @@ rst_epilog = """
 html_theme_path = ['../_themes']
 html_theme = 'sphinx_rtd_theme'
 html_short_title = 'Ansible Documentation'
+html_show_sphinx = False
 
 html_theme_options = {
     'canonical_url': "https://docs.ansible.com/ansible/latest/",
+    'vcs_pageview_mode': 'edit'
+}
+
+html_context = {
+    'display_github': 'True',
+    'github_user': 'ansible',
+    'github_repo': 'ansible',
+    'github_version': 'devel/docs/docsite/rst/',
+    'github_module_version': 'devel/lib/ansible/modules/',
+    'current_version': version,
+    'latest_version': '2.8',
+    # list specifically out of order to make latest work
+    'available_versions': ('latest', '2.7', '2.6', 'devel')
 }
 
 # The style sheet to use for HTML and HTML Help pages. A file of that name
@@ -145,7 +159,7 @@ html_title = 'Ansible Documentation'
 
 # The name of an image file (within the static path) to place at the top of
 # the sidebar.
-# html_logo = None
+# html_logo =
 
 # The name of an image file (within the static path) to use as favicon of the
 # docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32

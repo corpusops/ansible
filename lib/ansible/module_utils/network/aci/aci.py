@@ -38,7 +38,7 @@ from copy import deepcopy
 
 from ansible.module_utils.parsing.convert_bool import boolean
 from ansible.module_utils.urls import fetch_url
-from ansible.module_utils._text import to_bytes
+from ansible.module_utils._text import to_bytes, to_native
 
 # Optional, only used for APIC signature-based authentication
 try:
@@ -241,7 +241,7 @@ class ACIModule(object):
         self.headers['Cookie'] = 'APIC-Certificate-Algorithm=v1.0; ' +\
                                  'APIC-Certificate-DN=%s; ' % sig_dn +\
                                  'APIC-Certificate-Fingerprint=fingerprint; ' +\
-                                 'APIC-Request-Signature=%s' % sig_signature
+                                 'APIC-Request-Signature=%s' % to_native(sig_signature)
 
     def response_json(self, rawoutput):
         ''' Handle APIC JSON response output '''
@@ -400,9 +400,9 @@ class ACIModule(object):
         ''' Build an APIC filter based on obj_class and key-value pairs '''
         accepted_params = dict((k, v) for (k, v) in params.items() if v is not None)
         if len(accepted_params) == 1:
-            return ','.join('eq({0}.{1}, "{2}")'.format(obj_class, k, v) for (k, v) in accepted_params.items())
+            return ','.join('eq({0}.{1},"{2}")'.format(obj_class, k, v) for (k, v) in accepted_params.items())
         elif len(accepted_params) > 1:
-            return 'and(' + ','.join(['eq({0}.{1}, "{2}")'.format(obj_class, k, v) for (k, v) in accepted_params.items()]) + ')'
+            return 'and(' + ','.join(['eq({0}.{1},"{2}")'.format(obj_class, k, v) for (k, v) in accepted_params.items()]) + ')'
 
     def construct_url(self, root_class, subclass_1=None, subclass_2=None, subclass_3=None, child_classes=None):
         """

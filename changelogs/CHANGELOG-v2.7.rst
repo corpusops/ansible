@@ -5,6 +5,276 @@ Ansible 2.7 "In the Light" Release Notes
 .. contents:: Topics
 
 
+v2.7.14
+=======
+
+Release Summary
+---------------
+
+| Release Date: 2019-10-17
+| `Porting Guide <https://docs.ansible.com/ansible/devel/porting_guides.html>`__
+
+
+Minor Changes
+-------------
+
+- ansible-test defaults to redacting sensitive values (disable with the ``--no-redact`` option)
+
+Bugfixes
+--------
+
+- **SECURITY** - CVE-2019-14846 - Several Ansible plugins could disclose aws credentials in log files.  inventory/aws_ec2.py, inventory/aws_rds.py, lookup/aws_account_attribute.py, and lookup/aws_secret.py, lookup/aws_ssm.py use the boto3 library from the Ansible process. The boto3 library logs credentials at log level DEBUG.  If Ansible's logging was enabled (by setting LOG_PATH to a value) Ansible would set the global log level to DEBUG.  This was inherited by boto and would then log boto credentials to the file specified by LOG_PATH.  This did not affect aws ansible modules as those are executed in a separate process.  This has been fixed by switching to log level INFO
+- **security issue** - Convert CLI provided passwords to text initially, to prevent unsafe context being lost when converting from bytes->text during post processing of PlayContext. This prevents CLI provided passwords from being incorrectly templated (CVE-2019-14856)
+
+- **security issue** - properly hide parameters marked with ``no_log`` in suboptions when invalid parameters are passed to the module (CVE-2019-14858)
+- ACI modules - Fix a whitespace issue in filters for ACI 4.2 strict validation
+
+v2.7.13
+=======
+
+Release Summary
+---------------
+
+| Release Date: 2019-08-15
+| `Porting Guide <https://docs.ansible.com/ansible/devel/porting_guides.html>`__
+
+
+Bugfixes
+--------
+
+- resolves CVE-2019-10206, by avoiding templating passwords from prompt as it is probable they have special characters.
+
+v2.7.12
+=======
+
+Release Summary
+---------------
+
+| Release Date: 2019-07-03
+| `Porting Guide <https://docs.ansible.com/ansible/devel/porting_guides.html>`__
+
+
+Bugfixes
+--------
+
+- Handle improper variable substitution that was happening in safe_eval, it was always meant to just do 'type enforcement' and have Jinja2 deal with all variable interpolation. Also see CVE-2019-10156
+
+v2.7.11
+=======
+
+Release Summary
+---------------
+
+| Release Date: 2019-05-23
+| `Porting Guide <https://docs.ansible.com/ansible/devel/porting_guides.html>`__
+
+
+Bugfixes
+--------
+
+- Add missing parameters in get_config vyos (https://github.com/ansible/ansible/pull/50855).
+- Fix defaults option in the nxos_config module (https://github.com/ansible/ansible/pull/51076).
+- Fix netconf plugin dispatch response (https://github.com/ansible/ansible/issues/53236)
+- Fix nxos action plugin for nxos_install_os (https://github.com/ansible/ansible/pull/53768).
+- Fix privilege escalation support for the docker connection plugin when credentials need to be supplied (e.g. sudo with password).
+- Fix regular expression for timeout (https://github.com/ansible/ansible/pull/53994).
+- Fix unwanted ACLs when using copy module (https://github.com/ansible/ansible/issues/44412)
+- Fix vyos cli prompt inspection (https://github.com/ansible/ansible/pull/55589)
+- Match VLAN ID as whole line instead of searching for digits in line (https://github.com/ansible/ansible/pull/51019).
+- Meraki - Lookups using org_name or net_name no longer query Meraki twice, only once. Major performance improvements.
+- Move netconf import errors from import to use.
+- Removes superfluous commands nxos_vlan (https://github.com/ansible/ansible/pull/51796).
+- To fix the nios_zone module idempotency failure  - https://github.com/ansible/ansible/pull/55595
+- aci modules - Ensure we use native strings for signature
+- acme_certificate - writing result failed when no path was specified (i.e. destination in current working directory).
+- dnf - fix issue with dnf API calls to adapt to changes in upstream dnf version 4.2.2
+- docker_container - ``oom_killer`` and ``oom_score_adj`` options are available since docker-py 1.8.0, not 2.0.0 as assumed by the version check.
+- docker_container - fix idempotency of ``log_options`` when non-string values are used. Also warn user that this is the case.
+- docker_container - make again compatible with docker-py 1.7.0.
+- docker_container - use docker API's ``restart`` instead of ``stop``/``start`` to restart a container.
+- docker_service - fixed an issue where ``remove_orphans`` doesn't work reliably.
+- docker_swarm_service - Change the type of options ``gid`` and ``uid`` to ``str`` and ``mode`` to ``int`` on ``secrets`` and ``configs``.
+- fix eos_l2_interface insufficient commands (https://github.com/ansible/ansible/pull/50754).
+- fix eos_l2_interface invalid command (https://github.com/ansible/ansible/pull/50644).
+- gcp_compute - improve documentation on the usage of the dynamics gcp_compute inventory
+- httpapi/nxos_facts raise ConnectionError is missing `code` (https://github.com/ansible/ansible/pull/53406).
+- meraki_vlan - Module would make unnecessary API calls to Meraki when net_id is specified in task.
+- network.py:ActionModule:run does not honor _handle_src_option failures (https://github.com/ansible/ansible/pull/52745).
+- nxos_hsrp fix sh_preempt <unknown enum:> (https://github.com/ansible/ansible/pull/52858).
+- nxos_igmp_snooping group-timeout fails when igmp snooping disabled (https://github.com/ansible/ansible/pull/53079).
+- nxos_igmp_snooping more group-timeout fixes (https://github.com/ansible/ansible/pull/53553).
+- nxos_interface DI delay only when operation state check is requested (https://github.com/ansible/ansible/pull/54862).
+- nxos_interfaces_ospf fix passive-interface states & check_mode (https://github.com/ansible/ansible/pull/54260).
+- nxos_linkagg `group` type mismatch causes idempotency failure (https://github.com/ansible/ansible/pull/53653).
+- nxos_user fails to remove usernames with embedded rawstring (https://github.com/ansible/ansible/pull/53149).
+- pass correct loading context to persistent connections
+- psrp - Fix blank newlines appearing before ``stdout`` when using ``script`` or ``raw`` with the ``psrp`` connection plugin
+- psrp - Fix issues when fetching large files causing a memory leak - https://github.com/ansible/ansible/issues/55239
+- psrp - Fix issues with propagating errors back to Ansible with ``raw`` tasks
+- redfish_utils - expose timeout option for redfish implementations that exceed the 10 second default
+- redfish_utils - fix "406 Not Acceptable" issue with some OOB controllers (https://github.com/ansible/ansible/issues/55078)
+- redhat_subscription - For compatibility using the redhat_subscription module on hosts set to use a python 3 interpreter, use string values when updating yum plugin configuration files.
+- remove become plugins reference introduced in backport fix
+- sysctl: the module now also checks the output of STDERR to report if values are correctly set (https://github.com/ansible/ansible/pull/55695)
+- udm_dns_record - Fix issues when state is absent with undefined variable diff at the module return.
+- udm_dns_zone - Fix issues when state is absent with undefined variable diff at the module return.
+- udm_group - Fix issues when state is absent with undefined variable diff at the module return.
+- udm_share - Fix issues when state is absent with undefined variable diff at the module return.
+- udm_user - Fix issues when state is absent with undefined variable diff at the module return.
+- ufw - when ``default`` is specified, ``direction`` does not needs to be specified. This was accidentally introduced in Ansible 2.7.8.
+- user - properly parse the shadow file on AIX (https://github.com/ansible/ansible/issues/54461)
+- vsphere_guest - creating machines without vm_extra_config allowed
+- vsphere_guest - powering on/off absent virtual machine will fail
+- vultr_server - Fix idempotency for options ``ipv6_enabled`` and ``private_network_enabled``.
+- win_acl - Fix qualifier parser when using UNC paths - https://github.com/ansible/ansible/issues/55875
+- win_domain - Fix checking for a domain introduced in a recent patch
+- win_reboot - pass return value for ``test_command`` result when using the ``psrp`` connection plugin
+- win_region - Fix the check for ``format`` when running on the ``psrp`` connection plugin
+- yum allows comparison operators like '>=' for selecting package version
+
+v2.7.10
+=======
+
+Release Summary
+---------------
+
+| Release Date: 2019-04-03
+| `Porting Guide <https://docs.ansible.com/ansible/devel/porting_guides.html>`__
+
+
+Minor Changes
+-------------
+
+- Catch all connection timeout related exceptions and raise AnsibleConnectionError instead
+- openssl_pkcs12, openssl_privatekey, openssl_publickey - These modules no longer delete the output file before starting to regenerate the output, or when generating the output failed.
+
+Bugfixes
+--------
+
+- Backport of https://github.com/ansible/ansible/pull/54105, pamd - fix idempotence issue when removing rules
+- Use custom JSON encoder in conneciton.py so that ansible objects (AnsibleVaultEncryptedUnicode, for example) can be sent to the persistent connection process
+- allow 'dict()' jinja2 global to function the same even though it has changed in jinja2 versions
+- azure_rm inventory plugin - fix missing hostvars properties (https://github.com/ansible/ansible/pull/53046)
+- azure_rm inventory plugin - fix no nic type in vmss nic. (https://github.com/ansible/ansible/pull/53496)
+- deprecate {Get/Set}ManagerAttributes commands (https://github.com/ansible/ansible/issues/47590)
+- flatpak_remote - Handle empty output in remote_exists, fixes https://github.com/ansible/ansible/issues/51481
+- foreman - fix Foreman returning host parameters
+- get_url - Fix issue with checksum validation when using a file to ensure we skip lines in the file that do not contain exactly 2 parts. Also restrict exception handling to the minimum number of necessary lines (https://github.com/ansible/ansible/issues/48790)
+- grafana_datasource - Fixed an issue when running Python3 and using basic auth (https://github.com/ansible/ansible/issues/49147)
+- include_tasks - Fixed an unexpected exception if no file was given to include.
+- openssl_certificate - fix ``state=absent``.
+- openssl_certificate, openssl_csr, openssl_pkcs12, openssl_privatekey, openssl_publickey - The modules are now able to overwrite write-protected files (https://github.com/ansible/ansible/issues/48656).
+- openssl_dhparam - fix ``state=absent`` idempotency and ``changed`` flag.
+- openssl_pkcs12, openssl_privatekey - These modules now accept the output file mode in symbolic form or as a octal string (https://github.com/ansible/ansible/issues/53476).
+- openssl_publickey - fixed crash on Python 3 when OpenSSH private keys were used with passphrases.
+- openstack inventory plugin: allow "constructed" functionality (``compose``, ``groups``, and ``keyed_groups``) to work as documented.
+- random_mac - generate a proper MAC address when the provided vendor prefix is two or four characters (https://github.com/ansible/ansible/issues/50838)
+- replace - fix behavior when ``before`` and ``after`` are used together (https://github.com/ansible/ansible/issues/31354)
+- report correct CPU information on ARM systems (https://github.com/ansible/ansible/pull/52884)
+- slurp - Fix issues when using paths on Windows with glob like characters, e.g. ``[``, ``]``
+- ssh - Check the return code of the ssh process before raising AnsibleConnectionFailure, as the error message for the ssh process will likely contain more useful information. This will improve the missing interpreter messaging when using modules such as setup which have a larger payload to transfer when combined with pipelining. (https://github.com/ansible/ansible/issues/53487)
+- tower_settings - 'name' and 'value' parameters are always required, module can not be used in order to get a setting
+- win_acl - Fix issues when using paths with glob like characters, e.g. ``[``, ``]``
+- win_acl_inheritance - Fix issues when using paths with glob like characters, e.g. ``[``, ``]``
+- win_certificate_store - Fix issues when using paths with glob like characters, e.g. ``[``, ``]``
+- win_chocolatey - Fix incompatibilities with the latest release of Chocolatey ``v0.10.12+``
+- win_copy - Fix issues when using paths with glob like characters, e.g. ``[``, ``]``
+- win_file - Fix issues when using paths with glob like characters, e.g. ``[``, ``]``
+- win_find - Ensure found files are sorted alphabetically by the path instead of it being random
+- win_find - Fix issues when using paths with glob like characters, e.g. ``[``, ``]``
+- win_owner - Fix issues when using paths with glob like characters, e.g. ``[``, ``]``
+- win_psexec - Support executables with a space in the path
+- win_reboot - Fix reboot command validation failure when running under the psrp connection plugin
+- win_tempfile - Always return the full NTFS absolute path and not a DOS 8.3 path.
+- win_user_right - Fix output containing non json data - https://github.com/ansible/ansible/issues/54413
+- windows - Fixed various module utils that did not work with path that had glob like chars
+- yum - fix disable_excludes on systems with yum rhn plugin enabled (https://github.com/ansible/ansible/issues/53134)
+
+v2.7.9
+======
+
+Release Summary
+---------------
+
+| Release Date: 2019-03-14
+| `Porting Guide <https://docs.ansible.com/ansible/devel/porting_guides.html>`__
+
+
+Minor Changes
+-------------
+
+- Add missing import for ConnectionError in edge and routeros module_utils.
+- ``to_yaml`` filter updated to maintain formatting consistency when used with ``pyyaml`` versions 5.1 and later (https://github.com/ansible/ansible/pull/53772)
+- docker_image - set ``changed`` to ``false`` when using ``force: yes`` to tag or push an image that ends up being identical to one already present on the Docker host or Docker registry.
+- jenkins_plugin - Set new default value for the update_url parameter (https://github.com/ansible/ansible/issues/52086)
+
+Bugfixes
+--------
+
+- Fix bug where some inventory parsing tracebacks were missing or reported under the wrong plugin.
+- Fix rabbitmq_plugin idempotence due to information message in new version of rabbitmq (https://github.com/ansible/ansible/pull/52166)
+- Fixed KeyError issue in vmware_host_config_manager when a supported option isn't already set (https://github.com/ansible/ansible/issues/44561).
+- Fixed issue related to --yaml flag in vmware_vm_inventory. Also fixed caching issue in vmware_vm_inventory (https://github.com/ansible/ansible/issues/52381).
+- If large integers are passed as options to modules under Python 2, module argument parsing will reject them as they are of type ``long`` and not of type ``int``.
+- allow nice error to work when auto plugin reads file w/o `plugin` field
+- ansible-doc - Fix traceback on providing arguemnt --all to ansible-doc command
+- azure_rm_virtualmachine_facts - fixed crash related to attached managed disks (https://github.com/ansible/ansible/issues/52181)
+- basic - modify the correct variable when determining available hashing algorithms to avoid errors when md5 is not available (https://github.com/ansible/ansible/issues/51355)
+- cloudscale - Fix compatibilty with Python3 in version 3.5 and lower.
+- convert input into text to ensure valid comparisons in nmap inventory plugin
+- dict2items - Allow dict2items to work with hostvars
+- dnsimple - fixed a KeyError exception related to record types handling.
+- docker_container - now returns warnings from docker daemon on container creation and updating.
+- docker_swarm - Fixed node_id parameter not working for node removal (https://github.com/ansible/ansible/issues/53501)
+- docker_swarm - do not crash with older docker daemons (https://github.com/ansible/ansible/issues/51175).
+- docker_swarm - fixes idempotency for the ``ca_force_rotate`` option.
+- docker_swarm - improve Swarm detection.
+- docker_swarm - improve idempotency checking; ``rotate_worker_token`` and ``rotate_manager_token`` are now also used when all other parameters have not changed.
+- docker_swarm - now supports docker-py 1.10.0 and newer for most operations, instead only docker 2.6.0 and newer.
+- docker_swarm - properly implement check mode (it did apply changes).
+- docker_swarm - the ``force`` option was ignored when ``state: present``.
+- docker_swarm_service - do basic validation of ``publish`` option if specified (must be list of dicts).
+- docker_swarm_service - don't crash when ``publish`` is not specified.
+- docker_swarm_service - fix problem with docker daemons which do not return ``UpdateConfig`` in the swarm service spec.
+- docker_swarm_service - the return value was documented as ``ansible_swarm_service``, but the module actually returned ``ansible_docker_service``. Documentation and code have been updated so that the variable is now called ``swarm_service``. In Ansible 2.7.x, the old name ``ansible_docker_service`` can still be used to access the result.
+- ec2 - if the private_ip has been provided for the new network interface it shouldn't also be added to top level parameters for run_instances()
+- fix DNSimple to ensure check works even when the number of records is larger than 100
+- get_url - return no change in check mode when checksum matches
+- inventory plugins - Fix creating groups from composed variables by getting the latest host variables
+- inventory_aws_ec2 - fix no_log indentation so AWS temporary credentials aren't displayed in tests
+- jenkins_plugin - Prevent plugin to be reinstalled when state=present (https://github.com/ansible/ansible/issues/43728)
+- lvol - fixed ValueError when using float size (https://github.com/ansible/ansible/issues/32886, https://github.com/ansible/ansible/issues/29429)
+- mysql - MySQLdb doesn't import the cursors module for its own purposes so it has to be imported in MySQL module utilities before it can be used in dependent modules like the proxysql module family.
+- mysql - fixing unexpected keyword argument 'cursorclass' issue after migration from MySQLdb to PyMySQL.
+- mysql_user: match backticks, single and double quotes when checking user privileges.
+- onepassword_facts - Fixes issues which prevented this module working with 1Password CLI version 0.5.5 (or greater). Older versions of the CLI were deprecated by 1Password and will no longer function.
+- openssl_certificate - ``has_expired`` correctly checks if the certificate is expired or not
+- openssl_certificate - fix Python 3 string/bytes problems for `notBefore`/`notAfter` for self-signed and ownCA providers.
+- openssl_certificate - make sure that extensions are actually present when their values should be checked.
+- openssl_csr - improve ``subject`` validation.
+- openssl_csr - improve error messages for invalid SANs.
+- play order is now applied under all circumstances, fixes
+- remote_management foreman - Fixed issue where it was impossible to createdelete a product because product was missing in dict choices ( https://github.com/ansible/ansible/issues/48594 )
+- rhsm_repository - handle systems without any repos
+- skip invalid plugin after warning in loader
+- urpmi module - fixed issue
+- win_certificate_store - Fix exception handling typo
+- win_chocolatey - Fix issue when parsing a beta Chocolatey install - https://github.com/ansible/ansible/issues/52331
+- win_chocolatey_source - fix bug where a Chocolatey source could not be disabled unless ``source`` was also set - https://github.com/ansible/ansible/issues/50133
+- win_domain - Do not fail if DC is already promoted but a reboot is required, return ``reboot_required: True``
+- win_domain - Fix when running without credential delegated authentication - https://github.com/ansible/ansible/issues/53182
+- win_file - Fix issue when managing hidden files and directories - https://github.com/ansible/ansible/issues/42466
+- winrm - attempt to recover from a WinRM send input failure if possible
+- zabbix_hostmacro: fixes truncation of macro contexts that contain colons (see https://github.com/ansible/ansible/pull/51853)
+
+New Plugins
+-----------
+
+Inventory
+~~~~~~~~~
+
+- vmware_vm_inventory - VMware Guest inventory source
+
 v2.7.8
 ======
 

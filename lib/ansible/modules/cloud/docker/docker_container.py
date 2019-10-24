@@ -294,7 +294,6 @@ options:
       - List of ports to publish from the container to the host.
       - "Use docker CLI syntax: C(8000), C(9000:8000), or C(0.0.0.0:9000:8000), where 8000 is a
         container port, 9000 is a host port, and 0.0.0.0 is a host interface."
-      - Container ports must be exposed either in the Dockerfile or via the C(expose) option.
       - A value of C(all) will publish all exposed container ports to random host ports, ignoring
         any other mappings.
       - If C(networks) parameter is provided, will inspect each network to see if there exists
@@ -991,11 +990,13 @@ class TaskParameters(DockerBaseClass):
             group_add='groups',
             devices='devices',
             pid_mode='pid_mode',
-            tmpfs='tmpfs',
             init='init',
             uts_mode='uts',
             auto_remove='auto_remove',
         )
+
+        if self.client.docker_py_version >= LooseVersion('1.8'):
+            host_config_params['tmpfs'] = 'tmpfs'
 
         if self.client.docker_py_version >= LooseVersion('1.9') and self.client.docker_api_version >= LooseVersion('1.22'):
             # blkio_weight can always be updated, but can only be set on creation
@@ -1193,7 +1194,14 @@ class TaskParameters(DockerBaseClass):
         if self.log_options is not None:
             options['Config'] = dict()
             for k, v in self.log_options.items():
-                options['Config'][k] = str(v)
+                if not isinstance(v, string_types):
+                    self.client.module.warn(
+                        "Non-string value found for log_options option '%s'. The value is automatically converted to '%s'. "
+                        "If this is not correct, or you want to avoid such warnings, please quote the value." % (k, str(v))
+                    )
+                v = str(v)
+                self.log_options[k] = v
+                options['Config'][k] = v
 
         try:
             return LogConfig(**options)
@@ -1881,8 +1889,7 @@ class ContainerManager(DockerBaseClass):
             if state == 'started' and not container.running:
                 container = self.container_start(container.Id)
             elif state == 'started' and self.parameters.restart:
-                self.container_stop(container.Id)
-                container = self.container_start(container.Id)
+                container = self.container_restart(container.Id)
             elif state == 'stopped' and container.running:
                 self.container_stop(container.Id)
                 container = self._get_container(container.Id)
@@ -2030,6 +2037,7 @@ class ContainerManager(DockerBaseClass):
         if not self.check_mode:
             try:
                 new_container = self.client.create_container(image, **create_parameters)
+                self.client.report_warnings(new_container)
             except Exception as exc:
                 self.fail("Error creating container: %s" % str(exc))
             return self._get_container(new_container['Id'])
@@ -2122,7 +2130,8 @@ class ContainerManager(DockerBaseClass):
             self.results['changed'] = True
             if not self.check_mode and callable(getattr(self.client, 'update_container')):
                 try:
-                    self.client.update_container(container_id, **update_parameters)
+                    result = self.client.update_container(container_id, **update_parameters)
+                    self.client.report_warnings(result)
                 except Exception as exc:
                     self.fail("Error updating container %s: %s" % (container_id, str(exc)))
         return self._get_container(container_id)
@@ -2140,6 +2149,19 @@ class ContainerManager(DockerBaseClass):
             except Exception as exc:
                 self.fail("Error killing container %s: %s" % (container_id, exc))
         return response
+
+    def container_restart(self, container_id):
+        self.results['actions'].append(dict(restarted=container_id, timeout=self.parameters.stop_timeout))
+        self.results['changed'] = True
+        if not self.check_mode:
+            try:
+                if self.parameters.stop_timeout:
+                    response = self.client.restart(container_id, timeout=self.parameters.stop_timeout)
+                else:
+                    response = self.client.restart(container_id)
+            except Exception as exc:
+                self.fail("Error restarting container %s: %s" % (container_id, str(exc)))
+        return self._get_container(container_id)
 
     def container_stop(self, container_id):
         if self.parameters.force_kill:
@@ -2234,7 +2256,7 @@ class AnsibleDockerClientContainer(AnsibleDockerClient):
         self.comparisons = comparisons
 
     def __init__(self, **kwargs):
-        def detect_ipvX_address_usage():
+        def detect_ipvX_address_usage(client):
             '''
             Helper function to detect whether any specified network uses ipv4_address or ipv6_address
             '''
@@ -2254,11 +2276,10 @@ class AnsibleDockerClientContainer(AnsibleDockerClient):
             dns_opts=dict(docker_api_version='1.21', docker_py_version='1.10.0'),
             ipc_mode=dict(docker_api_version='1.25'),
             mac_address=dict(docker_api_version='1.25'),
-            oom_killer=dict(docker_py_version='2.0.0'),
-            oom_score_adj=dict(docker_api_version='1.22', docker_py_version='2.0.0'),
+            oom_score_adj=dict(docker_api_version='1.22'),
             shm_size=dict(docker_api_version='1.22'),
             stop_signal=dict(docker_api_version='1.21'),
-            tmpfs=dict(docker_api_version='1.22'),
+            tmpfs=dict(docker_api_version='1.22', docker_py_version='1.8.0'),
             volume_driver=dict(docker_api_version='1.21'),
             memory_reservation=dict(docker_api_version='1.21'),
             kernel_memory=dict(docker_api_version='1.21'),

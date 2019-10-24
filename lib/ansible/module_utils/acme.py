@@ -133,9 +133,10 @@ def write_file(module, dest, content):
             raise ModuleFailException("Destination %s not readable" % (dest))
         checksum_dest = module.sha1(dest)
     else:
-        if not os.access(os.path.dirname(dest), os.W_OK):
+        dirname = os.path.dirname(dest) or '.'
+        if not os.access(dirname, os.W_OK):
             os.remove(tmpsrc)
-            raise ModuleFailException("Destination dir %s not writable" % (os.path.dirname(dest)))
+            raise ModuleFailException("Destination dir %s not writable" % (dirname))
     if checksum_src != checksum_dest:
         try:
             shutil.copyfile(tmpsrc, dest)
@@ -443,7 +444,7 @@ class ACMEDirectory(object):
     and allows to obtain a Replay-Nonce. The acme_directory URL
     needs to support unauthenticated GET requests; ACME endpoints
     requiring authentication are not supported.
-    https://tools.ietf.org/html/draft-ietf-acme-acme-14#section-7.1.1
+    https://tools.ietf.org/html/rfc8555#section-7.1.1
     '''
 
     def __init__(self, module, account):
@@ -514,7 +515,7 @@ class ACMEAccount(object):
     def get_keyauthorization(self, token):
         '''
         Returns the key authorization for the given token
-        https://tools.ietf.org/html/draft-ietf-acme-acme-14#section-8.1
+        https://tools.ietf.org/html/rfc8555#section-8.1
         '''
         accountkey_json = json.dumps(self.jwk, sort_keys=True, separators=(',', ':'))
         thumbprint = nopad_b64(hashlib.sha256(accountkey_json.encode('utf8')).digest())
@@ -551,10 +552,10 @@ class ACMEAccount(object):
         '''
         Sends a JWS signed HTTP POST request to the ACME server and returns
         the response as dictionary
-        https://tools.ietf.org/html/draft-ietf-acme-acme-14#section-6.2
+        https://tools.ietf.org/html/rfc8555#section-6.2
 
         If payload is None, a POST-as-GET is performed.
-        (https://tools.ietf.org/html/draft-ietf-acme-acme-15#section-6.3)
+        (https://tools.ietf.org/html/rfc8555#section-6.3)
         '''
         key_data = key_data or self.key_data
         jws_header = jws_header or self.jws_header
@@ -585,7 +586,7 @@ class ACMEAccount(object):
                     try:
                         decoded_result = self.module.from_json(content.decode('utf8'))
                         # In case of badNonce error, try again (up to 5 times)
-                        # (https://tools.ietf.org/html/draft-ietf-acme-acme-14#section-6.6)
+                        # (https://tools.ietf.org/html/rfc8555#section-6.7)
                         if (400 <= info['status'] < 600 and
                                 decoded_result.get('type') == 'urn:ietf:params:acme:error:badNonce' and
                                 failed_tries <= 5):
@@ -659,7 +660,7 @@ class ACMEAccount(object):
         Registers a new ACME account. Returns True if the account was
         created and False if it already existed (e.g. it was not newly
         created).
-        https://tools.ietf.org/html/draft-ietf-acme-acme-14#section-7.3
+        https://tools.ietf.org/html/rfc8555#section-7.3
         '''
         contact = [] if contact is None else contact
 
@@ -695,7 +696,7 @@ class ACMEAccount(object):
             if result.get('status') == 'deactivated':
                 # A probable bug in Pebble (https://github.com/letsencrypt/pebble/issues/179)
                 # and Boulder: this should not return a valid account object according to
-                # https://tools.ietf.org/html/draft-ietf-acme-acme-16#section-7.3.6:
+                # https://tools.ietf.org/html/rfc8555#section-7.3.6:
                 #     "Once an account is deactivated, the server MUST NOT accept further
                 #      requests authorized by that account's key."
                 if not allow_creation:
@@ -762,7 +763,7 @@ class ACMEAccount(object):
         will be stored in self.uri; if it is None, the account does not
         exist.
 
-        https://tools.ietf.org/html/draft-ietf-acme-acme-14#section-7.3
+        https://tools.ietf.org/html/rfc8555#section-7.3
         '''
 
         new_account = True
