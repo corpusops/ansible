@@ -2,7 +2,7 @@
 
 
 ## divergences (on all branches)
-- [Workaround to speed up facts building when non default sysctl settings](https://github.com/ansible/ansible/commit/7966ac9b93d3ac70f08cd47e662dc7eb6ece9869)
+- [Workaround to speed up facts building when non default sysctl settings](https://github.com/ansible/ansible/commit/3002b18ae0fa223c44cb02c21883c66de3cd9864)
     - tied to this bug: [#24228](https://github.com/ansible/ansible/issues/24228)
 - [include_role vars will be exposed by default](https://github.com/ansible/ansible/commit/2877273d689cf57a0ee9c0cfb0134a1c51e1aa27)
     As for a long time we lived with a PR for  ``include_role`` that exposed vars by default, we use that change to maintain compat in the meantime.
