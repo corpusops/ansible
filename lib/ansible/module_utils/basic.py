@@ -1940,15 +1940,14 @@ class AnsibleModule(object):
         for param in self.params:
             canon = self.aliases.get(param, param)
             arg_opts = self.argument_spec.get(canon, {})
-            no_log = arg_opts.get('no_log', False)
+            no_log = arg_opts.get('no_log', None)
 
-            if self.boolean(no_log):
-                log_args[param] = 'NOT_LOGGING_PARAMETER'
-            # try to capture all passwords/passphrase named fields missed by no_log
-            elif PASSWORD_MATCH.search(param) and arg_opts.get('type', 'str') != 'bool' and not arg_opts.get('choices', False):
-                # skip boolean and enums as they are about 'password' state
+            # try to proactively capture password/passphrase fields
+            if no_log is None and PASSWORD_MATCH.search(param):
                 log_args[param] = 'NOT_LOGGING_PASSWORD'
                 self.warn('Module did not set no_log for %s' % param)
+            elif self.boolean(no_log):
+                log_args[param] = 'NOT_LOGGING_PARAMETER'
             else:
                 param_val = self.params[param]
                 if not isinstance(param_val, (text_type, binary_type)):
@@ -2453,9 +2452,10 @@ class AnsibleModule(object):
             are expanded before running the command. When ``True`` a string such as
             ``$SHELL`` will be expanded regardless of escaping. When ``False`` and
             ``use_unsafe_shell=False`` no path or variable expansion will be done.
-        :kw pass_fds: When running on python3 this argument
+        :kw pass_fds: When running on Python 3 this argument
             dictates which file descriptors should be passed
-            to an underlying ``Popen`` constructor.
+            to an underlying ``Popen`` constructor. On Python 2, this will
+            set ``close_fds`` to False.
         :kw before_communicate_callback: This function will be called
             after ``Popen`` object will be created
             but before communicating to the process.
@@ -2566,6 +2566,8 @@ class AnsibleModule(object):
         )
         if PY3 and pass_fds:
             kwargs["pass_fds"] = pass_fds
+        elif PY2 and pass_fds:
+            kwargs['close_fds'] = False
 
         # store the pwd
         prev_dir = os.getcwd()

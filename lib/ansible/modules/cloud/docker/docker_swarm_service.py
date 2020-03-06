@@ -55,7 +55,6 @@ options:
         description:
           - Name of the file containing the config. Defaults to the I(config_name) if not specified.
         type: str
-        required: yes
       uid:
         description:
           - UID of the config file's owner.
@@ -194,7 +193,6 @@ options:
       - Service image path and tag.
       - Corresponds to the C(IMAGE) parameter of C(docker service create).
     type: str
-    required: yes
   labels:
     description:
       - Dictionary of key value pairs.
@@ -640,7 +638,6 @@ options:
       - C(present) - Asserts the existence of a service matching the name and provided configuration parameters.
         Unspecified configuration parameters will be set to docker defaults.
     type: str
-    required: yes
     default: present
     choices:
       - present
@@ -1930,8 +1927,11 @@ class DockerService(DockerBaseClass):
     def has_healthcheck_changed(self, old_publish):
         if self.healthcheck_disabled is False and self.healthcheck is None:
             return False
-        if self.healthcheck_disabled and old_publish.healthcheck is None:
-            return False
+        if self.healthcheck_disabled:
+            if old_publish.healthcheck is None:
+                return False
+            if old_publish.healthcheck.get('test') == ['NONE']:
+                return False
         return self.healthcheck != old_publish.healthcheck
 
     def has_publish_changed(self, old_publish):
@@ -2056,6 +2056,8 @@ class DockerService(DockerBaseClass):
             container_spec_args['labels'] = self.container_labels
         if self.healthcheck is not None:
             container_spec_args['healthcheck'] = types.Healthcheck(**self.healthcheck)
+        elif self.healthcheck_disabled:
+            container_spec_args['healthcheck'] = types.Healthcheck(test=['NONE'])
         if self.hostname is not None:
             container_spec_args['hostname'] = self.hostname
         if self.hosts is not None:

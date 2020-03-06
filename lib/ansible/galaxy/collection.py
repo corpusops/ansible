@@ -30,9 +30,9 @@ import ansible.constants as C
 from ansible.errors import AnsibleError
 from ansible.galaxy import get_collections_galaxy_meta_info
 from ansible.galaxy.api import CollectionVersionMetadata, GalaxyError
+from ansible.galaxy.user_agent import user_agent
 from ansible.module_utils import six
 from ansible.module_utils._text import to_bytes, to_native, to_text
-from ansible.module_utils.ansible_release import __version__ as ansible_version
 from ansible.utils.collection_loader import AnsibleCollectionRef
 from ansible.utils.display import Display
 from ansible.utils.hashing import secure_hash, secure_hash_s
@@ -101,13 +101,17 @@ class CollectionRequirement:
 
     @property
     def dependencies(self):
-        if self._metadata:
-            return self._metadata.dependencies
-        elif len(self.versions) > 1:
-            return None
+        if not self._metadata:
+            if len(self.versions) > 1:
+                return {}
+            self._get_metadata()
 
-        self._get_metadata()
-        return self._metadata.dependencies
+        dependencies = self._metadata.dependencies
+
+        if dependencies is None:
+            return {}
+
+        return dependencies
 
     def add_requirement(self, parent, requirement):
         self.required_by.append((parent, requirement))
@@ -213,12 +217,15 @@ class CollectionRequirement:
                 requirement = req
                 op = operator.eq
 
-                # In the case we are checking a new requirement on a base requirement (parent != None) we can't accept
-                # version as '*' (unknown version) unless the requirement is also '*'.
-                if parent and version == '*' and requirement != '*':
-                    break
-                elif requirement == '*' or version == '*':
-                    continue
+            # In the case we are checking a new requirement on a base requirement (parent != None) we can't accept
+            # version as '*' (unknown version) unless the requirement is also '*'.
+            if parent and version == '*' and requirement != '*':
+                display.warning("Failed to validate the collection requirement '%s:%s' for %s when the existing "
+                                "install does not have a version set, the collection may not work."
+                                % (to_text(self), req, parent))
+                continue
+            elif requirement == '*' or version == '*':
+                continue
 
             if not op(LooseVersion(version), LooseVersion(requirement)):
                 break
@@ -280,7 +287,13 @@ class CollectionRequirement:
             manifest = info['manifest_file']['collection_info']
             namespace = manifest['namespace']
             name = manifest['name']
-            version = manifest['version']
+            version = to_text(manifest['version'], errors='surrogate_or_strict')
+
+            if not hasattr(LooseVersion(version), 'version'):
+                display.warning("Collection at '%s' does not have a valid version set, falling back to '*'. Found "
+                                "version: '%s'" % (to_text(b_path), version))
+                version = '*'
+
             dependencies = manifest['dependencies']
         else:
             display.warning("Collection at '%s' does not have a MANIFEST.json file, cannot detect version."
@@ -848,7 +861,7 @@ def _get_collection_info(dep_map, existing_collections, collection, requirement,
     existing = [c for c in existing_collections if to_text(c) == to_text(collection_info)]
     if existing and not collection_info.force:
         # Test that the installed collection fits the requirement
-        existing[0].add_requirement(to_text(collection_info), requirement)
+        existing[0].add_requirement(parent, requirement)
         collection_info = existing[0]
 
     dep_map[to_text(collection_info)] = collection_info
@@ -866,7 +879,7 @@ def _download_file(url, b_path, expected_hash, validate_certs, headers=None):
     display.vvv("Downloading %s to %s" % (url, to_text(b_path)))
     # Galaxy redirs downloads to S3 which reject the request if an Authorization header is attached so don't redir that
     resp = open_url(to_native(url, errors='surrogate_or_strict'), validate_certs=validate_certs, headers=headers,
-                    unredirected_headers=['Authorization'], http_agent='ansible-galaxy/%s' % ansible_version)
+                    unredirected_headers=['Authorization'], http_agent=user_agent())
 
     with open(b_file_path, 'wb') as download_file:
         data = resp.read(bufsize)

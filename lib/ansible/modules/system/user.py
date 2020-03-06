@@ -420,8 +420,8 @@ import subprocess
 import time
 
 from ansible.module_utils import distro
-from ansible.module_utils._text import to_native, to_bytes, to_text
 from ansible.module_utils.basic import load_platform_subclass, AnsibleModule
+from ansible.module_utils._text import to_bytes, to_native, to_text
 
 try:
     import spwd
@@ -2303,7 +2303,7 @@ class DarwinUser(User):
         for field in self.fields:
             if field[0] in self.__dict__ and self.__dict__[field[0]]:
                 current = self._get_user_property(field[1])
-                if current is None or current != self.__dict__[field[0]]:
+                if current is None or current != to_text(self.__dict__[field[0]]):
                     cmd = self._get_dscl()
                     cmd += ['-create', '/Users/%s' % self.name, field[1], self.__dict__[field[0]]]
                     (rc, _err, _out) = self.execute_command(cmd)
@@ -2856,9 +2856,9 @@ def main():
             ssh_key_file=dict(type='path'),
             ssh_key_comment=dict(type='str', default=ssh_defaults['comment']),
             ssh_key_passphrase=dict(type='str', no_log=True),
-            update_password=dict(type='str', default='always', choices=['always', 'on_create']),
+            update_password=dict(type='str', default='always', choices=['always', 'on_create'], no_log=False),
             expires=dict(type='float'),
-            password_lock=dict(type='bool'),
+            password_lock=dict(type='bool', no_log=False),
             local=dict(type='bool'),
             profile=dict(type='str'),
             authorization=dict(type='str'),
