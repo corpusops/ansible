@@ -13,12 +13,11 @@
     · [2.7](https://github.com/corpusops/ansible/tree/include_role_cache_tags_bug_27)
     · [2.4](https://github.com/corpusops/ansible/tree/include_role_cache_tags_bug)
     - [Failed acceptance...](https://github.com/ansible/ansible/pull/35164)
-
-## divergences (on all branches prior to 2.9)
 - `include_role` should honour allow_duplicates: <br/>
     · [devel](https://github.com/corpusops/ansible/tree/include_role_honour_allow_duplicates_devel)
-    · [2.8](https://github.com/corpusops/ansible/tree/include_role_honour_allow_duplicates_2.8)
-    · [2.7](https://github.com/corpusops/ansible/tree/include_role_honour_allow_duplicates_2.7)
+    · [2.9](https://github.com/corpusops/ansible/tree/include_role_honour_allow_duplicates_29)
+    · [2.8](https://github.com/corpusops/ansible/tree/include_role_honour_allow_duplicates_28)
+    · [2.7](https://github.com/corpusops/ansible/tree/include_role_honour_allow_duplicates_27)
     · [2.4](https://github.com/corpusops/ansible/tree/include_role_honour_allow_duplicates)
     - [Failed acceptance...](https://github.com/ansible/ansible/pull/35164)
     - [superseded on 2.9 by #64902](https://github.com/ansible/ansible/issues/64902) with same fixes we did
@@ -30,6 +29,7 @@
 - [backport_role_shared_vars branch](https://github.com/corpusops/ansible/tree/backport_role_shared_vars)  backport of [#41330](https://github.com/ansible/ansible/pull/41330)
 
 ## abandoned changes
+- on `stable-2.9`: [Strip include_role configuration parameters from all_variables](https://github.com/corpusops/ansible/tree/strip_vars)
 - [fix Include role: exposed/shared vars](https://github.com/ansible/ansible/pull/35131)
   superseeded by [#41330](https://github.com/ansible/ansible/pull/41330)
 - [include_role](https://github.com/ansible/ansible/pull/32565)
