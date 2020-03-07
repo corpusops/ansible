@@ -18,7 +18,7 @@
     · [2.7](https://github.com/corpusops/ansible/tree/include_role_honour_allow_duplicates_27)
     · [2.4](https://github.com/corpusops/ansible/tree/include_role_honour_allow_duplicates)
     - [Failed acceptance...](https://github.com/ansible/ansible/pull/35164)
-    - [superseded on 2.9 by #64902](https://github.com/ansible/ansible/issues/64902) with same fixes we did
+    - [helped by #64902 on 2.9, but not fully covered yet](https://github.com/ansible/ansible/issues/64902)
 
 ## Backports on 2.4
 - [debug should have item (#36534)](https://github.com/ansible/ansible/commit/2f13ddbd694e8c6ae2f5d1737796c7a75109eda5#diff-ab09fa2a9291a017c38c5db420d7ee0f)
