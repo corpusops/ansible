@@ -4,7 +4,7 @@
     has already run only if if it does not allow it
   hosts: testhost
   pre_tasks: [set_fact: {counter: 0, altcounter: 0, nocounter: 0, cacheable: False}]
-  roles: 
+  roles:
   - honour_duplicates/inccounter
   - honour_duplicates/altinccounter
   - honour_duplicates/noinccounter
