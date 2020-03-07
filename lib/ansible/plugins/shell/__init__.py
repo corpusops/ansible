@@ -39,12 +39,6 @@ class ShellBase(AnsiblePlugin):
         super(ShellBase, self).__init__()
 
         self.env = {}
-        if C.DEFAULT_MODULE_SET_LOCALE:
-            module_locale = C.DEFAULT_MODULE_LANG
-            self.env = {'LANG': module_locale,
-                        'LC_ALL': module_locale,
-                        'LC_MESSAGES': module_locale}
-
         self.tmpdir = None
         self.executable = None
 
@@ -176,7 +170,7 @@ class ShellBase(AnsiblePlugin):
             http://pubs.opengroup.org/onlinepubs/000095399/basedefs/xbd_chap03.html#tag_03_426
             http://pubs.opengroup.org/onlinepubs/000095399/basedefs/xbd_chap03.html#tag_03_276
 
-            Falls back to 'current workind directory' as we assume 'home is where the remote user ends up'
+            Falls back to 'current working directory' as we assume 'home is where the remote user ends up'
         '''
 
         # Check that the user_path to expand is safe

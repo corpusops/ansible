@@ -139,7 +139,7 @@ options:
     suboptions:
       filename:
         description:
-          - The filename to be used to store the backup configuration. If the the filename
+          - The filename to be used to store the backup configuration. If the filename
             is not given it will be generated based on the hostname, current time and date
             in format defined by <hostname>_config.<current-date>@<current-time>
       dir_path:
@@ -180,8 +180,7 @@ backup_path:
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.network.ironware.ironware import ironware_argument_spec, check_args
 from ansible.module_utils.network.ironware.ironware import get_config, load_config, run_commands
-from ansible.module_utils.network.common.config import NetworkConfig, dumps, ConfigLine
-from ansible.module_utils._text import to_native
+from ansible.module_utils.network.common.config import NetworkConfig, dumps
 
 
 def get_candidate(module):
@@ -280,8 +279,6 @@ def main():
     result = {'changed': False}
 
     check_args(module)
-
-    config = None
 
     if module.params['backup']:
         result['__backup__'] = get_config(module)

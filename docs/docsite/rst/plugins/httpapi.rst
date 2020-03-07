@@ -18,7 +18,7 @@ others might be usable on a variety of platforms (RESTCONF).
 Adding httpapi plugins
 -------------------------
 
-You can extend Ansible to support other APIs by dropping a custom plugin into the ``httpapi_plugins`` directory.
+You can extend Ansible to support other APIs by dropping a custom plugin into the ``httpapi_plugins`` directory. See :ref:`developing_plugins_httpapi` for details.
 
 .. _using_httpapi:
 
@@ -31,6 +31,27 @@ Most httpapi plugins can operate without configuration. Additional options may b
 
 Plugins are self-documenting. Each plugin should document its configuration options.
 
+
+The following sample playbook shows the httpapi plugin for an Arista network device, assuming an inventory variable set as ``ansible_network_os=eos`` for the httpapi plugin to trigger off:
+
+.. code-block:: yaml
+
+  - hosts: leaf01
+    connection: httpapi
+    gather_facts: false
+    tasks:
+
+      - name: type a simple arista command
+        eos_command:
+          commands:
+            - show version | json
+        register: command_output
+
+      - name: print command output to terminal window
+        debug:
+          var: command_output.stdout[0]["version"]
+
+See the full working example at https://github.com/network-automation/httpapi.
 
 .. _httpapi_plugin_list:
 
@@ -51,6 +72,8 @@ Use ``ansible-doc -t httpapi <plugin name>`` to see detailed documentation and e
 
    :ref:`Ansible for Network Automation<network_guide>`
        An overview of using Ansible to automate networking devices.
+   :ref:`Developing network modules<developing_modules_network>`
+       How to develop network modules.
    `User Mailing List <https://groups.google.com/group/ansible-devel>`_
        Have a question?  Stop by the google group!
    `irc.freenode.net <http://irc.freenode.net>`_

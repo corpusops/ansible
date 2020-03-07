@@ -20,6 +20,7 @@ options:
         description:
             - Active Directory user password. Use when authenticating with an Active Directory user rather than service
               principal.
+        type: str
     profile:
         description:
             - Security profile found in ~/.azure/credentials file.
@@ -93,9 +94,10 @@ requirements:
     - azure >= 2.0.0
 
 notes:
-    - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
-      in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
-      To authenticate via service principal, pass subscription_id, client_id, secret and tenant or set environment
+    - For authentication with Azure you can pass parameters, set environment variables, use a profile stored
+      in ~/.azure/credentials, or log in before you run your tasks or playbook with C(az login).
+    - Authentication is also possible using a service principal or Active Directory user.
+    - To authenticate via service principal, pass subscription_id, client_id, secret and tenant or set environment
       variables AZURE_SUBSCRIPTION_ID, AZURE_CLIENT_ID, AZURE_SECRET and AZURE_TENANT.
     - To authenticate via Active Directory user, pass ad_user and password, or set AZURE_AD_USER and
       AZURE_PASSWORD in the environment.
@@ -103,4 +105,9 @@ notes:
       a [default] section and the following keys: subscription_id, client_id, secret and tenant or
       subscription_id, ad_user and password. It is also possible to add additional profiles. Specify the profile
       by passing profile or setting AZURE_PROFILE in the environment."
+
+seealso:
+    - name: Sign in with Azure CLI
+      link: https://docs.microsoft.com/en-us/cli/azure/authenticate-azure-cli?view=azure-cli-latest
+      description: How to authenticate using the C(az login) command.
     '''

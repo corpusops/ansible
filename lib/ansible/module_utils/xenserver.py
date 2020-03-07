@@ -9,15 +9,18 @@ __metaclass__ = type
 import atexit
 import time
 import re
+import traceback
 
-HAS_XENAPI = False
+XENAPI_IMP_ERR = None
 try:
     import XenAPI
     HAS_XENAPI = True
 except ImportError:
-    pass
+    HAS_XENAPI = False
+    XENAPI_IMP_ERR = traceback.format_exc()
 
-from ansible.module_utils.basic import env_fallback
+from ansible.module_utils.basic import env_fallback, missing_required_lib
+from ansible.module_utils.common.network import is_mac
 from ansible.module_utils.ansible_release import __version__ as ANSIBLE_VERSION
 
 
@@ -70,19 +73,6 @@ def module_to_xapi_vm_power_state(power_state):
     }
 
     return vm_power_state_map.get(power_state)
-
-
-def is_valid_mac_addr(mac_addr):
-    """Validates given string as MAC address.
-
-    Args:
-        mac_addr (str): string to validate as MAC address.
-
-    Returns:
-        bool: True if string is valid MAC address, else False.
-    """
-    mac_addr_regex = re.compile('[0-9a-f]{2}([-:])[0-9a-f]{2}(\\1[0-9a-f]{2}){4}$')
-    return bool(mac_addr_regex.match(mac_addr.lower()))
 
 
 def is_valid_ip_addr(ip_addr):
@@ -478,7 +468,7 @@ def gather_vm_facts(module, vm_params):
                 vm_facts['cdrom'].update(type="none")
             else:
                 vm_facts['cdrom'].update(type="iso")
-                vm_facts['cdrom'].update(iso=vm_vbd_params['VDI']['name_label'])
+                vm_facts['cdrom'].update(iso_name=vm_vbd_params['VDI']['name_label'])
 
     for vm_vif_params in vm_params['VIFs']:
         vm_guest_metrics_networks = vm_params['guest_metrics'].get('networks', {})
@@ -492,7 +482,8 @@ def gather_vm_facts(module, vm_params):
             "prefix": "",
             "netmask": "",
             "gateway": "",
-            "ip6": [vm_guest_metrics_networks[ipv6] for ipv6 in vm_guest_metrics_networks.keys() if ipv6.startswith("%s/ipv6/" % vm_vif_params['device'])],
+            "ip6": [vm_guest_metrics_networks[ipv6] for ipv6 in sorted(vm_guest_metrics_networks.keys()) if ipv6.startswith("%s/ipv6/" %
+                                                                                                                            vm_vif_params['device'])],
             "prefix6": "",
             "gateway6": "",
         }
@@ -575,7 +566,7 @@ def set_vm_power_state(module, vm_ref, power_state, timeout=300):
                     # hard_shutdown will halt VM regardless of current state.
                     xapi_session.xenapi.VM.hard_shutdown(vm_ref)
             elif power_state == "restarted":
-                # hard_restart will restart VM only if VM is in paused or running state.
+                # hard_reboot will restart VM only if VM is in paused or running state.
                 if vm_power_state_current in ["paused", "poweredon"]:
                     if not module.check_mode:
                         xapi_session.xenapi.VM.hard_reboot(vm_ref)
@@ -647,22 +638,24 @@ def wait_for_task(module, task_ref, timeout=300):
 
     result = ""
 
-    # If we have to wait indefinitely, make timeout larger than 0 so we can
+    # If we have to wait indefinitely, make time_left larger than 0 so we can
     # enter while loop.
     if timeout == 0:
-        timeout = 1
+        time_left = 1
+    else:
+        time_left = timeout
 
     try:
-        while timeout > 0:
+        while time_left > 0:
             task_status = xapi_session.xenapi.task.get_status(task_ref).lower()
 
             if task_status == "pending":
                 # Task is still running.
                 time.sleep(interval)
 
-                # We decrease timeout only if we don't wait indefinitely.
+                # We decrease time_left only if we don't wait indefinitely.
                 if timeout != 0:
-                    timeout -= interval
+                    time_left -= interval
 
                 continue
             elif task_status == "success":
@@ -710,7 +703,7 @@ def wait_for_vm_ip_address(module, vm_ref, timeout=300):
         vm_power_state = xapi_to_module_vm_power_state(xapi_session.xenapi.VM.get_power_state(vm_ref).lower())
 
         if vm_power_state != 'poweredon':
-            module.fail_json(msg="Cannot wait for VM IP address when VM is in state '%s'." % vm_power_state)
+            module.fail_json(msg="Cannot wait for VM IP address when VM is in state '%s'!" % vm_power_state)
 
         interval = 2
 
@@ -856,15 +849,9 @@ class XenServerObject(object):
             module: Reference to Ansible module object.
         """
         if not HAS_XENAPI:
-            module.fail_json(changed=False, msg=("XenAPI Python library is required for this module! "
-                                                 "Please download XenServer SDK and copy XenAPI.py to your Python site-packages. "
-                                                 "Check Notes section in module documentation for more info."))
+            module.fail_json(changed=False, msg=missing_required_lib("XenAPI"), exception=XENAPI_IMP_ERR)
 
-        if module:
-            self.module = module
-        else:
-            module.fail_json(msg="XenServerObject: Invalid module object passed!")
-
+        self.module = module
         self.xapi_session = XAPI.connect(module)
 
         try:

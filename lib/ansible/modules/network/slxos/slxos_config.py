@@ -164,7 +164,7 @@ options:
     suboptions:
       filename:
         description:
-          - The filename to be used to store the backup configuration. If the the filename
+          - The filename to be used to store the backup configuration. If the filename
             is not given it will be generated based on the hostname, current time and date
             in format defined by <hostname>_config.<current-date>@<current-time>
       dir_path:
@@ -254,14 +254,10 @@ backup_path:
   type: str
   sample: /playbooks/ansible/backup/slxos_config.2018-02-12@18:26:34
 """
-import re
-import time
 
 from ansible.module_utils.network.slxos.slxos import run_commands, get_config, load_config
 from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils.network.common.parsing import Conditional
 from ansible.module_utils.network.common.config import NetworkConfig, dumps
-from ansible.module_utils.six import iteritems
 
 __metaclass__ = type
 

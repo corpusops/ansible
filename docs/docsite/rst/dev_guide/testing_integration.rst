@@ -64,7 +64,7 @@ outside of those test subdirectories.  They will also not reconfigure or bounce 
 
 .. note:: Running integration tests within Docker
 
-   To protect your system from any potential changes caused by integration tests, and to ensure a sensible set of dependencies are available we recommend that you always run integration tests with the ``--docker`` option. See the `list of supported docker images <https://github.com/ansible/ansible/blob/devel/test/runner/completion/docker.txt>`_ for options.
+   To protect your system from any potential changes caused by integration tests, and to ensure a sensible set of dependencies are available we recommend that you always run integration tests with the ``--docker`` option. See the `list of supported docker images <https://github.com/ansible/ansible/blob/devel/test/lib/ansible_test/_data/completion/docker.txt>`_ for options.
 
 .. note:: Avoiding pulling new Docker images
 
@@ -127,7 +127,7 @@ the Ansible continuous integration (CI) system is recommended.
 
    Using Docker Engine to run Docker on a non-Linux host (such as macOS) is not recommended.
    Some tests may fail, depending on the image used for testing.
-   Using the ``--docker-privileged`` option may resolve the issue.
+   Using the ``--docker-privileged`` option when running ``integration`` (not ``network-integration`` or ``windows-integration``) may resolve the issue.
 
 Running Integration Tests
 -------------------------
@@ -151,11 +151,8 @@ Most container images are for testing with Python 2:
 
   - centos6
   - centos7
-  - fedora24
-  - fedora25
-  - opensuse42.1
-  - opensuse42.2
-  - ubuntu1204
+  - fedora28
+  - opensuse15py2
   - ubuntu1404
   - ubuntu1604
 
@@ -164,7 +161,11 @@ Python 3
 
 To test with Python 3 use the following images:
 
+  - fedora29
+  - opensuse15
   - ubuntu1604py3
+  - ubuntu1804
+
 
 Legacy Cloud Tests
 ==================

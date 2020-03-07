@@ -28,16 +28,25 @@ options:
   name:
     description:
     - Name of the virtual machine to export.
-    - This is a required parameter, if parameter C(uuid) is not supplied.
+    - This is a required parameter, if parameter C(uuid) or C(moid) is not supplied.
+    type: str
   uuid:
     description:
     - Uuid of the virtual machine to export.
-    - This is a required parameter, if parameter C(name) is not supplied.
+    - This is a required parameter, if parameter C(name) or C(moid) is not supplied.
+    type: str
+  moid:
+    description:
+    - Managed Object ID of the instance to manage if known, this is a unique identifier only within a single vCenter instance.
+    - This is required if C(name) or C(uuid) is not supplied.
+    version_added: '2.9'
+    type: str
   datacenter:
     default: ha-datacenter
     description:
     - Datacenter name of the virtual machine to export.
     - This parameter is case sensitive.
+    type: str
   folder:
     description:
     - Destination folder, absolute path to find the specified guest.
@@ -55,16 +64,25 @@ options:
     - '   folder: /folder1/datacenter1/vm'
     - '   folder: folder1/datacenter1/vm'
     - '   folder: /folder1/datacenter1/vm/folder2'
+    type: str
   export_dir:
     description:
     - Absolute path to place the exported files on the server running this task, must have write permission.
     - If folder not exist will create it, also create a folder under this path named with VM name.
     required: yes
+    type: path
   export_with_images:
     default: false
     description:
     - Export an ISO image of the media mounted on the CD/DVD Drive within the virtual machine.
     type: bool
+  download_timeout:
+    description:
+    - The user defined timeout in second of exporting file.
+    - If the vmdk file is too large, you can increase the value.
+    default: 30
+    type: int
+    version_added: '2.9'
 extends_documentation_fragment: vmware.documentation
 '''
 
@@ -94,8 +112,8 @@ from time import sleep
 from threading import Thread
 from ansible.module_utils.urls import open_url
 from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils._text import to_text
-from ansible.module_utils.vmware import (connect_to_api, vmware_argument_spec, PyVmomi)
+from ansible.module_utils._text import to_text, to_bytes
+from ansible.module_utils.vmware import vmware_argument_spec, PyVmomi
 try:
     from pyVmomi import vim
     from pyVim import connect
@@ -137,9 +155,7 @@ class LeaseProgressUpdater(Thread):
 
 class VMwareExportVmOvf(PyVmomi):
     def __init__(self, module):
-        self.content = connect_to_api(module)
-        self.module = module
-        self.params = module.params
+        super(VMwareExportVmOvf, self).__init__(module)
         self.mf_file = ''
         self.ovf_dir = ''
         # set read device content chunk size to 2 MB
@@ -147,6 +163,7 @@ class VMwareExportVmOvf(PyVmomi):
         # set lease progress update interval to 15 seconds
         self.lease_interval = 15
         self.facts = {'device_files': []}
+        self.download_timeout = None
 
     def create_export_dir(self, vm_obj):
         self.ovf_dir = os.path.join(self.params['export_dir'], vm_obj.name)
@@ -162,11 +179,12 @@ class VMwareExportVmOvf(PyVmomi):
                               total_bytes_to_write):
         mf_content = 'SHA256(' + os.path.basename(temp_target_disk) + ')= '
         sha256_hash = hashlib.sha256()
+        response = None
 
         with open(self.mf_file, 'a') as mf_handle:
             with open(temp_target_disk, 'wb') as handle:
                 try:
-                    response = open_url(device_url, headers=headers, validate_certs=False)
+                    response = open_url(device_url, headers=headers, validate_certs=False, timeout=self.download_timeout)
                 except Exception as err:
                     lease_updater.httpNfcLease.HttpNfcLeaseAbort()
                     lease_updater.stop()
@@ -199,6 +217,8 @@ class VMwareExportVmOvf(PyVmomi):
         export_with_iso = False
         if 'export_with_images' in self.params and self.params['export_with_images']:
             export_with_iso = True
+        self.download_timeout = self.params['download_timeout']
+
         ovf_files = []
         # get http nfc lease firstly
         http_nfc_lease = vm_obj.ExportVm()
@@ -280,9 +300,9 @@ class VMwareExportVmOvf(PyVmomi):
                 ovf_descriptor_path = os.path.join(self.ovf_dir, ovf_descriptor_name + '.ovf')
                 sha256_hash = hashlib.sha256()
                 with open(self.mf_file, 'a') as mf_handle:
-                    with open(ovf_descriptor_path, 'wb') as handle:
+                    with open(ovf_descriptor_path, 'w') as handle:
                         handle.write(vm_descriptor)
-                        sha256_hash.update(vm_descriptor)
+                        sha256_hash.update(to_bytes(vm_descriptor))
                     mf_handle.write('SHA256(' + os.path.basename(ovf_descriptor_path) + ')= ' + sha256_hash.hexdigest() + '\n')
                 http_nfc_lease.HttpNfcLeaseProgress(100)
                 # self.facts = http_nfc_lease.HttpNfcLeaseGetManifest()
@@ -293,7 +313,7 @@ class VMwareExportVmOvf(PyVmomi):
             kwargs = {
                 'changed': False,
                 'failed': True,
-                'msg': to_text(err),
+                'msg': "get exception: %s" % to_text(err),
             }
             http_nfc_lease.HttpNfcLeaseAbort()
             lease_updater.stop()
@@ -306,16 +326,18 @@ def main():
     argument_spec.update(
         name=dict(type='str'),
         uuid=dict(type='str'),
+        moid=dict(type='str'),
         folder=dict(type='str'),
         datacenter=dict(type='str', default='ha-datacenter'),
-        export_dir=dict(type='str'),
+        export_dir=dict(type='path', required=True),
         export_with_images=dict(type='bool', default=False),
+        download_timeout=dict(type='int', default=30),
     )
 
     module = AnsibleModule(argument_spec=argument_spec,
                            supports_check_mode=True,
                            required_one_of=[
-                               ['name', 'uuid'],
+                               ['name', 'uuid', 'moid'],
                            ],
                            )
     pyv = VMwareExportVmOvf(module)
@@ -326,9 +348,9 @@ def main():
         if vm_power_state != 'poweredoff':
             module.fail_json(msg='VM state should be poweredoff to export')
         results = pyv.export_to_ovf_files(vm_obj=vm)
+        module.exit_json(**results)
     else:
         module.fail_json(msg='The specified virtual machine not found')
-    module.exit_json(**results)
 
 
 if __name__ == '__main__':

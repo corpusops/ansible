@@ -62,6 +62,42 @@ options:
         description:
             - Provides a new comment to the public key. When checking if the key is in the correct state this will be ignored.
         type: str
+        version_added: "2.9"
+    regenerate:
+        description:
+            - Allows to configure in which situations the module is allowed to regenerate private keys.
+              The module will always generate a new key if the destination file does not exist.
+            - By default, the key will be regenerated when it doesn't match the module's options,
+              except when the key cannot be read or the passphrase does not match. Please note that
+              this B(changed) for Ansible 2.10. For Ansible 2.9, the behavior was as if C(full_idempotence)
+              is specified.
+            - If set to C(never), the module will fail if the key cannot be read or the passphrase
+              isn't matching, and will never regenerate an existing key.
+            - If set to C(fail), the module will fail if the key does not correspond to the module's
+              options.
+            - If set to C(partial_idempotence), the key will be regenerated if it does not conform to
+              the module's options. The key is B(not) regenerated if it cannot be read (broken file),
+              the key is protected by an unknown passphrase, or when they key is not protected by a
+              passphrase, but a passphrase is specified.
+            - If set to C(full_idempotence), the key will be regenerated if it does not conform to the
+              module's options. This is also the case if the key cannot be read (broken file), the key
+              is protected by an unknown passphrase, or when they key is not protected by a passphrase,
+              but a passphrase is specified. Make sure you have a B(backup) when using this option!
+            - If set to C(always), the module will always regenerate the key. This is equivalent to
+              setting I(force) to C(yes).
+            - Note that adjusting the comment and the permissions can be changed without regeneration.
+              Therefore, even for C(never), the task can result in changed.
+        type: str
+        choices:
+            - never
+            - fail
+            - partial_idempotence
+            - full_idempotence
+            - always
+        default: partial_idempotence
+        version_added: '2.10'
+notes:
+    - In case the ssh key is broken or password protected, the module will fail. Set the I(force) option to C(yes) if you want to regenerate the keypair.
 
 extends_documentation_fragment: files
 '''
@@ -107,15 +143,21 @@ fingerprint:
     description: The fingerprint of the key.
     returned: changed or success
     type: str
-    sample: 4096 SHA256:r4YCZxihVjedH2OlfjVGI6Y5xAYtdCwk8VxKyzVyYfM example@example.com (RSA)
+    sample: SHA256:r4YCZxihVjedH2OlfjVGI6Y5xAYtdCwk8VxKyzVyYfM
 public_key:
     description: The public key of the generated SSH private key
     returned: changed or success
     type: str
     sample: ssh-rsa AAAAB3Nza(...omitted...)veL4E3Xcw== test_key
+comment:
+    description: The comment of the generated key
+    returned: changed or success
+    type: str
+    sample: test@comment
 '''
 
 import os
+import stat
 import errno
 
 from ansible.module_utils.basic import AnsibleModule
@@ -140,6 +182,9 @@ class Keypair(object):
         self.privatekey = None
         self.fingerprint = {}
         self.public_key = {}
+        self.regenerate = module.params['regenerate']
+        if self.regenerate == 'always':
+            self.force = True
 
         if self.type in ('rsa', 'rsa1'):
             self.size = 4096 if self.size is None else self.size
@@ -164,7 +209,7 @@ class Keypair(object):
 
     def generate(self, module):
         # generate a keypair
-        if not self.isValid(module, perms_required=False) or self.force:
+        if self.force or not self.isPrivateKeyValid(module, perms_required=False):
             args = [
                 module.get_bin_path('ssh-keygen', True),
                 '-q',
@@ -180,8 +225,13 @@ class Keypair(object):
                 args.extend(['-C', ""])
 
             try:
+                if os.path.exists(self.path) and not os.access(self.path, os.W_OK):
+                    os.chmod(self.path, stat.S_IWUSR + stat.S_IRUSR)
                 self.changed = True
-                module.run_command(args)
+                stdin_data = None
+                if os.path.exists(self.path):
+                    stdin_data = 'y'
+                module.run_command(args, data=stdin_data)
                 proc = module.run_command([module.get_bin_path('ssh-keygen', True), '-lf', self.path])
                 self.fingerprint = proc[1].split()
                 pubkey = module.run_command([module.get_bin_path('ssh-keygen', True), '-yf', self.path])
@@ -190,29 +240,82 @@ class Keypair(object):
                 self.remove()
                 module.fail_json(msg="%s" % to_native(e))
 
+        elif not self.isPublicKeyValid(module, perms_required=False):
+            pubkey = module.run_command([module.get_bin_path('ssh-keygen', True), '-yf', self.path])
+            pubkey = pubkey[1].strip('\n')
+            try:
+                self.changed = True
+                with open(self.path + ".pub", "w") as pubkey_f:
+                    pubkey_f.write(pubkey + '\n')
+                os.chmod(self.path + ".pub", stat.S_IWUSR + stat.S_IRUSR + stat.S_IRGRP + stat.S_IROTH)
+            except IOError:
+                module.fail_json(
+                    msg='The public key is missing or does not match the private key. '
+                        'Unable to regenerate the public key.')
+            self.public_key = pubkey
+
+            if self.comment:
+                try:
+                    if os.path.exists(self.path) and not os.access(self.path, os.W_OK):
+                        os.chmod(self.path, stat.S_IWUSR + stat.S_IRUSR)
+                    args = [module.get_bin_path('ssh-keygen', True),
+                            '-q', '-o', '-c', '-C', self.comment, '-f', self.path]
+                    module.run_command(args)
+                except IOError:
+                    module.fail_json(
+                        msg='Unable to update the comment for the public key.')
+
         file_args = module.load_file_common_arguments(module.params)
         if module.set_fs_attributes_if_different(file_args, False):
             self.changed = True
+        file_args['path'] = file_args['path'] + '.pub'
+        if module.set_fs_attributes_if_different(file_args, False):
+            self.changed = True
 
-    def isValid(self, module, perms_required=True):
+    def _check_pass_protected_or_broken_key(self, module):
+        key_state = module.run_command([module.get_bin_path('ssh-keygen', True),
+                                        '-P', '', '-yf', self.path], check_rc=False)
+        if key_state[0] == 255 or 'is not a public key file' in key_state[2]:
+            return True
+        if 'incorrect passphrase' in key_state[2] or 'load failed' in key_state[2]:
+            return True
+        return False
+
+    def isPrivateKeyValid(self, module, perms_required=True):
 
         # check if the key is correct
         def _check_state():
             return os.path.exists(self.path)
 
-        if _check_state():
-            proc = module.run_command([module.get_bin_path('ssh-keygen', True), '-lf', self.path])
-            fingerprint = proc[1].split()
-            pubkey = module.run_command([module.get_bin_path('ssh-keygen', True), '-yf', self.path])
-            pubkey = pubkey[1].strip('\n')
-            keysize = int(fingerprint[0])
-            keytype = fingerprint[-1][1:-1].lower()
-        else:
+        if not _check_state():
             return False
 
-        def _check_perms(module):
-            file_args = module.load_file_common_arguments(module.params)
-            return not module.set_fs_attributes_if_different(file_args, False)
+        if self._check_pass_protected_or_broken_key(module):
+            if self.regenerate in ('full_idempotence', 'always'):
+                return False
+            module.fail_json(msg='Unable to read the key. The key is protected with a passphrase or broken.'
+                                 ' Will not proceed. To force regeneration, call the module with `generate`'
+                                 ' set to `full_idempotence` or `always`, or with `force=yes`.')
+
+        proc = module.run_command([module.get_bin_path('ssh-keygen', True), '-lf', self.path], check_rc=False)
+        if not proc[0] == 0:
+            if os.path.isdir(self.path):
+                module.fail_json(msg='%s is a directory. Please specify a path to a file.' % (self.path))
+
+            if self.regenerate in ('full_idempotence', 'always'):
+                return False
+            module.fail_json(msg='Unable to read the key. The key is protected with a passphrase or broken.'
+                                 ' Will not proceed. To force regeneration, call the module with `generate`'
+                                 ' set to `full_idempotence` or `always`, or with `force=yes`.')
+
+        fingerprint = proc[1].split()
+        keysize = int(fingerprint[0])
+        keytype = fingerprint[-1][1:-1].lower()
+
+        self.fingerprint = fingerprint
+
+        if self.regenerate == 'never':
+            return True
 
         def _check_type():
             return self.type == keytype
@@ -220,26 +323,84 @@ class Keypair(object):
         def _check_size():
             return self.size == keysize
 
-        self.fingerprint = fingerprint
-        self.public_key = pubkey
+        if not (_check_type() and _check_size()):
+            if self.regenerate in ('partial_idempotence', 'full_idempotence', 'always'):
+                return False
+            module.fail_json(msg='Key has wrong type and/or size.'
+                                 ' Will not proceed. To force regeneration, call the module with `generate`'
+                                 ' set to `partial_idempotence`, `full_idempotence` or `always`, or with `force=yes`.')
 
-        if not perms_required:
-            return _check_state() and _check_type() and _check_size()
+        def _check_perms(module):
+            file_args = module.load_file_common_arguments(module.params)
+            return not module.set_fs_attributes_if_different(file_args, False)
 
-        return _check_state() and _check_perms(module) and _check_type() and _check_size()
+        return not perms_required or _check_perms(module)
+
+    def isPublicKeyValid(self, module, perms_required=True):
+
+        def _get_pubkey_content():
+            if os.path.exists(self.path + ".pub"):
+                with open(self.path + ".pub", "r") as pubkey_f:
+                    present_pubkey = pubkey_f.read().strip(' \n')
+                return present_pubkey
+            else:
+                return False
+
+        def _parse_pubkey(pubkey_content):
+            if pubkey_content:
+                parts = pubkey_content.split(' ', 2)
+                if len(parts) < 2:
+                    return False
+                return parts[0], parts[1], '' if len(parts) <= 2 else parts[2]
+            return False
+
+        def _pubkey_valid(pubkey):
+            if pubkey_parts and _parse_pubkey(pubkey):
+                return pubkey_parts[:2] == _parse_pubkey(pubkey)[:2]
+            return False
+
+        def _comment_valid():
+            if pubkey_parts:
+                return pubkey_parts[2] == self.comment
+            return False
+
+        def _check_perms(module):
+            file_args = module.load_file_common_arguments(module.params)
+            file_args['path'] = file_args['path'] + '.pub'
+            return not module.set_fs_attributes_if_different(file_args, False)
+
+        pubkey_parts = _parse_pubkey(_get_pubkey_content())
+
+        pubkey = module.run_command([module.get_bin_path('ssh-keygen', True), '-yf', self.path])
+        pubkey = pubkey[1].strip('\n')
+        if _pubkey_valid(pubkey):
+            self.public_key = pubkey
+        else:
+            return False
+
+        if self.comment:
+            if not _comment_valid():
+                return False
+
+        if perms_required:
+            if not _check_perms(module):
+                return False
+
+        return True
 
     def dump(self):
         # return result as a dict
 
         """Serialize the object into a dictionary."""
-
         result = {
             'changed': self.changed,
             'size': self.size,
             'type': self.type,
             'filename': self.path,
-            'fingerprint': self.fingerprint,
+            # On removal this has no value
+            'fingerprint': self.fingerprint[1] if self.fingerprint else '',
             'public_key': self.public_key,
+            'comment': self.comment if self.comment else '',
         }
 
         return result
@@ -278,6 +439,11 @@ def main():
             force=dict(type='bool', default=False),
             path=dict(type='path', required=True),
             comment=dict(type='str'),
+            regenerate=dict(
+                type='str',
+                default='partial_idempotence',
+                choices=['never', 'fail', 'partial_idempotence', 'full_idempotence', 'always']
+            ),
         ),
         supports_check_mode=True,
         add_file_common_args=True,
@@ -297,7 +463,7 @@ def main():
 
         if module.check_mode:
             result = keypair.dump()
-            result['changed'] = module.params['force'] or not keypair.isValid(module)
+            result['changed'] = keypair.force or not keypair.isPrivateKeyValid(module) or not keypair.isPublicKeyValid(module)
             module.exit_json(**result)
 
         try:

@@ -9,6 +9,14 @@ class ModuleDocFragment(object):
     # AWS only documentation fragment
     DOCUMENTATION = r'''
 options:
+  debug_botocore_endpoint_logs:
+    description:
+      - Use a botocore.endpoint logger to parse the unique (rather than total) "resource:action" API calls made during a task, outputing
+        the set to the resource_actions key in the task results. Use the aws_resource_action callback to output to total list made during
+        a playbook. The ANSIBLE_DEBUG_BOTOCORE_LOGS environment variable may also be used.
+    type: bool
+    default: 'no'
+    version_added: "2.8"
   ec2_url:
     description:
       - Url to use to connect to EC2 or your Eucalyptus cloud (by default the module will use EC2 endpoints).
@@ -42,6 +50,13 @@ options:
       - Uses a boto profile. Only works with boto >= 2.24.0.
     type: str
     version_added: "1.6"
+  aws_config:
+    description:
+      - A dictionary to modify the botocore configuration.
+      - Parameters can be found at U(https://botocore.amazonaws.com/v1/documentation/api/latest/reference/config.html#botocore.config.Config).
+      - Only the 'user_agent' key is used for boto modules. See U(http://boto.cloudhackers.com/en/latest/boto_config_tut.html#boto) for more boto configuration.
+    type: dict
+    version_added: "2.10"
 requirements:
   - python >= 2.6
   - boto

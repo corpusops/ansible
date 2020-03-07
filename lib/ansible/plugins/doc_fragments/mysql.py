@@ -20,6 +20,8 @@ options:
   login_host:
     description:
       - Host running the database.
+      - In some cases for local connections the I(login_unix_socket=/path/to/mysqld/socket),
+        that is usually C(/var/run/mysqld/mysqld.sock), needs to be used instead of I(login_host=localhost).
     type: str
     default: localhost
   login_port:
@@ -43,22 +45,25 @@ options:
     type: path
     default: '~/.my.cnf'
     version_added: "2.0"
-  ssl_ca:
+  ca_cert:
     description:
       - The path to a Certificate Authority (CA) certificate. This option, if used, must specify the same certificate
         as used by the server.
     type: path
     version_added: "2.0"
-  ssl_cert:
+    aliases: [ ssl_ca ]
+  client_cert:
     description:
       - The path to a client public key certificate.
     type: path
     version_added: "2.0"
-  ssl_key:
+    aliases: [ ssl_cert ]
+  client_key:
     description:
       - The path to the client private key.
     type: path
     version_added: "2.0"
+    aliases: [ ssl_key ]
 requirements:
    - PyMySQL (Python 2.7 and Python 3.X), or
    - MySQLdb (Python 2.x)
@@ -71,4 +76,9 @@ notes:
      passing credentials. If none are present, the module will attempt to read
      the credentials from C(~/.my.cnf), and finally fall back to using the MySQL
      default login of 'root' with no password.
+   - If there are problems with local connections, using I(login_unix_socket=/path/to/mysqld/socket)
+     instead of I(login_host=localhost) might help. As an example, the default MariaDB installation of version 10.4
+     and later uses the unix_socket authentication plugin by default that
+     without using I(login_unix_socket=/var/run/mysqld/mysqld.sock) (the default path)
+     causes the error ``Host '127.0.0.1' is not allowed to connect to this MariaDB server``.
 '''

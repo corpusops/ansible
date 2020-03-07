@@ -23,6 +23,7 @@
   luks_device:
     device: "{{ cryptfile_device }}"
     state: closed
+  become: yes
 
 - name: Try to open with keyfile2
   luks_device:
@@ -61,6 +62,11 @@
   luks_device:
     device: "{{ cryptfile_device }}"
     state: closed
+  become: yes
+
+- name: Dump LUKS header
+  command: "cryptsetup luksDump {{ cryptfile_device }}"
+  become: yes
 
 - name: Remove access from keyfile1
   luks_device:
@@ -99,6 +105,11 @@
   luks_device:
     device: "{{ cryptfile_device }}"
     state: closed
+  become: yes
+
+- name: Dump LUKS header
+  command: "cryptsetup luksDump {{ cryptfile_device }}"
+  become: yes
 
 - name: Remove access from keyfile2
   luks_device:
@@ -106,6 +117,40 @@
     state: closed
     keyfile: "{{ role_path }}/files/keyfile2"
     remove_keyfile: "{{ role_path }}/files/keyfile2"
+  become: yes
+  ignore_errors: yes
+  register: remove_last_key
+- assert:
+    that:
+    - remove_last_key is failed
+    - "'force_remove_last_key' in remove_last_key.msg"
+
+# Access: keyfile2
+
+- name: Try to open with keyfile2
+  luks_device:
+    device: "{{ cryptfile_device }}"
+    state: opened
+    keyfile: "{{ role_path }}/files/keyfile2"
+  become: yes
+  ignore_errors: yes
+  register: open_try
+- assert:
+    that:
+    - open_try is not failed
+- name: Close
+  luks_device:
+    device: "{{ cryptfile_device }}"
+    state: closed
+  become: yes
+
+- name: Remove access from keyfile2
+  luks_device:
+    device: "{{ cryptfile_device }}"
+    state: closed
+    keyfile: "{{ role_path }}/files/keyfile2"
+    remove_keyfile: "{{ role_path }}/files/keyfile2"
+    force_remove_last_key: yes
   become: yes
 
 # Access: none

@@ -10,6 +10,9 @@ These variables cannot be set directly by the user; Ansible will always override
 ansible_check_mode
     Boolean that indicates if we are in check mode or not
 
+ansible_config_file
+    The full path of used Ansible configuration file
+
 ansible_dependent_role_names
     The names of the roles currently imported into the current play as dependencies of other plays
 
@@ -27,6 +30,22 @@ ansible_limit
 
 ansible_loop
     A dictionary/map containing extended loop information when enabled via ``loop_control.extended``
+
+ansible_loop_var
+    The name of the value provided to ``loop_control.loop_var``. Added in ``2.8``
+
+ansible_index_var
+    The name of the value provided to ``loop_control.index_var``. Added in ``2.9``
+
+ansible_parent_role_names
+    When the current role is being executed by means of an :ref:`include_role <include_role_module>` or :ref:`import_role <import_role_module>` action, this variable contains a list of all parent roles, with the most recent role (i.e. the role that included/imported this role) being the first item in the list.
+    When multiple inclusions occur, this list lists the *last* role (i.e. the role that included this role) as the *first* item in the list. It is also possible that a specific role exists more than once in this list.
+
+    For example: When role **A** includes role **B**, inside role B, ``ansible_parent_role_names`` will equal to ``['A']``. If role **B** then includes role **C**, the list becomes ``['B', 'A']``.
+
+ansible_parent_role_paths
+    When the current role is being executed by means of an :ref:`include_role <include_role_module>` or :ref:`import_role <import_role_module>` action, this variable contains a list of all parent roles, with the most recent role (i.e. the role that included/imported this role) being the first item in the list.
+    Please refer to ``ansible_parent_role_names`` for the order of items in this list.
 
 ansible_play_batch
     List of active hosts in the current play run limited by the serial, aka 'batch'. Failed/Unreachable hosts are not considered 'active'.
@@ -55,7 +74,7 @@ ansible_search_path
     Current search path for action plugins and lookups, i.e where we search for relative paths when you do ``template: src=myfile``
 
 ansible_skip_tags
-    Contents of the ``--skip_tags`` CLI option, which specifies which tags will be skipped for the current run.
+    Contents of the ``--skip-tags`` CLI option, which specifies which tags will be skipped for the current run.
 
 ansible_verbosity
     Current verbosity setting for Ansible
@@ -97,7 +116,7 @@ playbook_dir
     The path to the directory of the playbook that was passed to the ``ansible-playbook`` command line.
 
 role_name
-    The name of the currently executed role
+    The name of the role currently being executed.
 
 role_names
     Deprecated, the same as ansible_play_role_names
@@ -118,10 +137,13 @@ ansible_local
     The keys available depend on the custom facts created.
     See the :ref:`setup <setup_module>` module for more details.
 
+.. _connection_variables:
+
 Connection variables
 ---------------------
 Connection variables are normally used to set the specifics on how to execute actions on a target. Most of them correspond to connection plugins, but not all are specific to them; other plugins like shell, terminal and become are normally involved.
 Only the common ones are described as each connection/become/shell/etc plugin can define its own overrides and specific variables.
+See :ref:`general_precedence_rules` for how connection variables interact with :ref:`configuration settings<ansible_configuration_settings>`, :ref:`command-line options<command_line_tools>`, and :ref:`playbook keywords<playbook_keywords>`.
 
 ansible_become_user
     The user Ansible 'becomes' after using privilege escalation. This must be available to the 'login user'.

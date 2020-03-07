@@ -44,6 +44,10 @@ options:
     description:
     - The name of the EPG.
     type: str
+  pod:
+    description:
+    - The pod of the static leaf.
+    type: str
   leaf:
     description:
     - The path of the static leaf.
@@ -60,6 +64,10 @@ options:
     type: str
     choices: [ absent, present, query ]
     default: present
+notes:
+- The ACI MultiSite PATCH API has a deficiency requiring some objects to be referenced by index.
+  This can cause silent corruption on concurrent access when changing/removing on object as
+  the wrong object may be referenced. This module is affected by this deficiency.
 seealso:
 - module: mso_schema_site_anp_epg
 - module: mso_schema_template_anp_epg
@@ -68,7 +76,7 @@ extends_documentation_fragment: mso
 
 EXAMPLES = r'''
 - name: Add a new static leaf to a site EPG
-  mso_schema_template_anp_epg_staticleaf:
+  mso_schema_site_anp_epg_staticleaf:
     host: mso_host
     username: admin
     password: SomeSecretPassword
@@ -83,7 +91,7 @@ EXAMPLES = r'''
   delegate_to: localhost
 
 - name: Remove a static leaf from a site EPG
-  mso_schema_template_anp_epg_staticleaf:
+  mso_schema_site_anp_epg_staticleaf:
     host: mso_host
     username: admin
     password: SomeSecretPassword
@@ -97,7 +105,7 @@ EXAMPLES = r'''
   delegate_to: localhost
 
 - name: Query a specific site EPG static leaf
-  mso_schema_template_anp_epg_staticleaf:
+  mso_schema_site_anp_epg_staticleaf:
     host: mso_host
     username: admin
     password: SomeSecretPassword
@@ -112,7 +120,7 @@ EXAMPLES = r'''
   register: query_result
 
 - name: Query all site EPG static leafs
-  mso_schema_template_anp_epg_staticleaf:
+  mso_schema_site_anp_epg_staticleaf:
     host: mso_host
     username: admin
     password: SomeSecretPassword
@@ -140,6 +148,7 @@ def main():
         template=dict(type='str', required=True),
         anp=dict(type='str', required=True),
         epg=dict(type='str', required=True),
+        pod=dict(type='str'),  # This parameter is not required for querying all objects
         leaf=dict(type='str', aliases=['name']),
         vlan=dict(type='int'),
         state=dict(type='str', default='present', choices=['absent', 'present', 'query']),
@@ -149,19 +158,22 @@ def main():
         argument_spec=argument_spec,
         supports_check_mode=True,
         required_if=[
-            ['state', 'absent', ['leaf', 'vlan']],
-            ['state', 'present', ['leaf', 'vlan']],
+            ['state', 'absent', ['pod', 'leaf', 'vlan']],
+            ['state', 'present', ['pod', 'leaf', 'vlan']],
         ],
     )
 
-    schema = module.params['schema']
-    site = module.params['site']
-    template = module.params['template']
-    anp = module.params['anp']
-    epg = module.params['epg']
-    leaf = module.params['leaf']
-    vlan = module.params['vlan']
-    state = module.params['state']
+    schema = module.params.get('schema')
+    site = module.params.get('site')
+    template = module.params.get('template')
+    anp = module.params.get('anp')
+    epg = module.params.get('epg')
+    pod = module.params.get('pod')
+    leaf = module.params.get('leaf')
+    vlan = module.params.get('vlan')
+    state = module.params.get('state')
+
+    leafpath = 'topology/{0}/node-{1}'.format(pod, leaf)
 
     mso = MSOModule(module)
 
@@ -171,13 +183,13 @@ def main():
         mso.fail_json(msg="Provided schema '{0}' does not exist".format(schema))
 
     schema_path = 'schemas/{id}'.format(**schema_obj)
-    schema_id = schema_obj['id']
+    schema_id = schema_obj.get('id')
 
     # Get site
     site_id = mso.lookup_site(site)
 
     # Get site_idx
-    sites = [(s['siteId'], s['templateName']) for s in schema_obj['sites']]
+    sites = [(s.get('siteId'), s.get('templateName')) for s in schema_obj.get('sites')]
     if (site_id, template) not in sites:
         mso.fail_json(msg="Provided site/template '{0}-{1}' does not exist. Existing sites/templates: {2}".format(site, template, ', '.join(sites)))
 
@@ -188,34 +200,34 @@ def main():
 
     # Get ANP
     anp_ref = mso.anp_ref(schema_id=schema_id, template=template, anp=anp)
-    anps = [a['anpRef'] for a in schema_obj['sites'][site_idx]['anps']]
+    anps = [a.get('anpRef') for a in schema_obj.get('sites')[site_idx]['anps']]
     if anp_ref not in anps:
         mso.fail_json(msg="Provided anp '{0}' does not exist. Existing anps: {1}".format(anp, ', '.join(anps)))
     anp_idx = anps.index(anp_ref)
 
     # Get EPG
     epg_ref = mso.epg_ref(schema_id=schema_id, template=template, anp=anp, epg=epg)
-    epgs = [e['epgRef'] for e in schema_obj['sites'][site_idx]['anps'][anp_idx]['epgs']]
+    epgs = [e.get('epgRef') for e in schema_obj.get('sites')[site_idx]['anps'][anp_idx]['epgs']]
     if epg_ref not in epgs:
         mso.fail_json(msg="Provided epg '{0}' does not exist. Existing epgs: {1}".format(epg, ', '.join(epgs)))
     epg_idx = epgs.index(epg_ref)
 
     # Get Leaf
-    leafs = [(l['path'], l['portEncapVlan']) for l in schema_obj['sites'][site_idx]['anps'][anp_idx]['epgs'][epg_idx]['staticLeafs']]
-    if (leaf, vlan) in leafs:
-        leaf_idx = leafs.index((leaf, vlan))
+    leafs = [(l.get('path'), l.get('portEncapVlan')) for l in schema_obj.get('sites')[site_idx]['anps'][anp_idx]['epgs'][epg_idx]['staticLeafs']]
+    if (leafpath, vlan) in leafs:
+        leaf_idx = leafs.index((leafpath, vlan))
         # FIXME: Changes based on index are DANGEROUS
         leaf_path = '/sites/{0}/anps/{1}/epgs/{2}/staticLeafs/{3}'.format(site_template, anp, epg, leaf_idx)
-        mso.existing = schema_obj['sites'][site_idx]['anps'][anp_idx]['epgs'][epg_idx]['staticLeafs'][leaf_idx]
+        mso.existing = schema_obj.get('sites')[site_idx]['anps'][anp_idx]['epgs'][epg_idx]['staticLeafs'][leaf_idx]
 
     if state == 'query':
         if leaf is None or vlan is None:
-            mso.existing = schema_obj['sites'][site_idx]['anps'][anp_idx]['epgs'][epg_idx]['staticLeafs']
+            mso.existing = schema_obj.get('sites')[site_idx]['anps'][anp_idx]['epgs'][epg_idx]['staticLeafs']
         elif not mso.existing:
             mso.fail_json(msg="Static leaf '{leaf}/{vlan}' not found".format(leaf=leaf, vlan=vlan))
         mso.exit_json()
 
-    leafs_path = '/sites/{0}/anps/{1}/epgs/{2}/staticLeafs'.format(site_template, anp_idx, epg_idx)
+    leafs_path = '/sites/{0}/anps/{1}/epgs/{2}/staticLeafs'.format(site_template, anp, epg)
     ops = []
 
     mso.previous = mso.existing
@@ -226,7 +238,7 @@ def main():
 
     elif state == 'present':
         payload = dict(
-            path=leaf,
+            path=leafpath,
             portEncapVlan=vlan,
         )
 

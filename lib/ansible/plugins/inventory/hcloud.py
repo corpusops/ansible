@@ -8,7 +8,7 @@ __metaclass__ = type
 DOCUMENTATION = r"""
     name: hcloud
     plugin_type: inventory
-    authors:
+    author:
       - Lukas Kaemmerling (@lkaemmerling)
     short_description: Ansible dynamic inventory plugin for the Hetzner Cloud.
     version_added: "2.8"
@@ -18,6 +18,8 @@ DOCUMENTATION = r"""
     description:
         - Reads inventories from the Hetzner Cloud API.
         - Uses a YAML configuration file that ends with hcloud.(yml|yaml).
+    extends_documentation_fragment:
+        - constructed
     options:
         plugin:
             description: marks this as an instance of the "hcloud" plugin
@@ -56,6 +58,11 @@ DOCUMENTATION = r"""
           default: ""
           type: str
           required: false
+        network:
+          description: Populate inventory with instances which are attached to this network name or ID.
+          default: ""
+          type: str
+          required: false
 """
 
 EXAMPLES = r"""
@@ -69,12 +76,24 @@ locations:
   - nbg1
 types:
   - cx11
+
+# Group by a location with prefix e.g. "hcloud_location_nbg1"
+# and image_os_flavor without prefix and separator e.g. "ubuntu"
+# and status with prefix e.g. "server_status_running"
+plugin: hcloud
+keyed_groups:
+  - key: location
+    prefix: hcloud_location
+  - key: image_os_flavor
+    separator: ""
+  - key: status
+    prefix: server_status
 """
 
 import os
-from ansible.errors import AnsibleError, AnsibleParserError
+from ansible.errors import AnsibleError
 from ansible.module_utils._text import to_native
-from ansible.plugins.inventory import BaseInventoryPlugin
+from ansible.plugins.inventory import BaseInventoryPlugin, Constructable
 from ansible.release import __version__
 
 try:
@@ -83,7 +102,7 @@ except ImportError:
     raise AnsibleError("The Hetzner Cloud dynamic inventory plugin requires hcloud-python.")
 
 
-class InventoryModule(BaseInventoryPlugin):
+class InventoryModule(BaseInventoryPlugin, Constructable):
     NAME = "hcloud"
 
     def _configure_hcloud_client(self):
@@ -107,19 +126,6 @@ class InventoryModule(BaseInventoryPlugin):
         except hcloud.APIException:
             raise AnsibleError("Invalid Hetzner Cloud API Token.")
 
-    def _add_groups(self):
-        locations = self.client.locations.get_all()
-        for location in locations:
-            self.inventory.add_group(to_native("location_" + location.name))
-
-        images = self.client.images.get_all(type="system")
-        for image in images:
-            self.inventory.add_group(to_native("image_" + image.os_flavor))
-
-        server_types = self.client.server_types.get_all()
-        for server_type in server_types:
-            self.inventory.add_group(to_native("server_type_" + server_type.name))
-
     def _get_servers(self):
         if len(self.get_option("label_selector")) > 0:
             self.servers = self.client.servers.get_all(label_selector=self.get_option("label_selector"))
@@ -127,6 +133,22 @@ class InventoryModule(BaseInventoryPlugin):
             self.servers = self.client.servers.get_all()
 
     def _filter_servers(self):
+        if self.get_option("network"):
+            try:
+                self.network = self.client.networks.get_by_name(self.get_option("network"))
+                if self.network is None:
+                    self.network = self.client.networks.get_by_id(self.get_option("network"))
+            except hcloud.APIException:
+                raise AnsibleError(
+                    "The given network is not found.")
+
+            tmp = []
+            for server in self.servers:
+                for server_private_network in server.private_net:
+                    if server_private_network.network.id == self.network.id:
+                        tmp.append(server)
+            self.servers = tmp
+
         if self.get_option("locations"):
             tmp = []
             for server in self.servers:
@@ -152,11 +174,17 @@ class InventoryModule(BaseInventoryPlugin):
         self.inventory.set_variable(server.name, "id", to_native(server.id))
         self.inventory.set_variable(server.name, "name", to_native(server.name))
         self.inventory.set_variable(server.name, "status", to_native(server.status))
+        self.inventory.set_variable(server.name, "type", to_native(server.server_type.name))
 
         # Network
         self.inventory.set_variable(server.name, "ipv4", to_native(server.public_net.ipv4.ip))
         self.inventory.set_variable(server.name, "ipv6_network", to_native(server.public_net.ipv6.network))
         self.inventory.set_variable(server.name, "ipv6_network_mask", to_native(server.public_net.ipv6.network_mask))
+
+        if self.get_option("network"):
+            for server_private_network in server.private_net:
+                if server_private_network.network.id == self.network.id:
+                    self.inventory.set_variable(server.name, "private_ipv4", to_native(server_private_network.ip))
 
         if self.get_option("connect_with") == "public_ipv4":
             self.inventory.set_variable(server.name, "ansible_host", to_native(server.public_net.ipv4.ip))
@@ -164,17 +192,40 @@ class InventoryModule(BaseInventoryPlugin):
             self.inventory.set_variable(server.name, "ansible_host", to_native(server.name))
         elif self.get_option("connect_with") == "ipv4_dns_ptr":
             self.inventory.set_variable(server.name, "ansible_host", to_native(server.public_net.ipv4.dns_ptr))
+        elif self.get_option("connect_with") == "private_ipv4":
+            if self.get_option("network"):
+                for server_private_network in server.private_net:
+                    if server_private_network.network.id == self.network.id:
+                        self.inventory.set_variable(server.name, "ansible_host", to_native(server_private_network.ip))
+            else:
+                raise AnsibleError(
+                    "You can only connect via private IPv4 if you specify a network")
 
         # Server Type
-        self.inventory.set_variable(server.name, "server_type", to_native(server.image.name))
+        if server.image is not None and server.image.name is not None:
+            self.inventory.set_variable(server.name, "server_type", to_native(server.image.name))
+        else:
+            self.inventory.set_variable(server.name, "server_type", to_native("No Image name found."))
 
         # Datacenter
         self.inventory.set_variable(server.name, "datacenter", to_native(server.datacenter.name))
         self.inventory.set_variable(server.name, "location", to_native(server.datacenter.location.name))
 
         # Image
-        self.inventory.set_variable(server.name, "image_id", to_native(server.image.id))
-        self.inventory.set_variable(server.name, "image_name", to_native(server.image.name))
+        if server.image is not None:
+            self.inventory.set_variable(server.name, "image_id", to_native(server.image.id))
+            self.inventory.set_variable(server.name, "image_os_flavor", to_native(server.image.os_flavor))
+            if server.image.name is not None:
+                self.inventory.set_variable(server.name, "image_name", to_native(server.image.name))
+            else:
+                self.inventory.set_variable(server.name, "image_name", to_native(server.image.description))
+        else:
+            self.inventory.set_variable(server.name, "image_id", to_native("No Image ID found"))
+            self.inventory.set_variable(server.name, "image_name", to_native("No Image Name found"))
+            self.inventory.set_variable(server.name, "image_os_flavor", to_native("No Image OS Flavor found"))
+
+        # Labels
+        self.inventory.set_variable(server.name, "labels", dict(server.labels))
 
     def verify_file(self, path):
         """Return the possibly of a file being consumable by this plugin."""
@@ -188,12 +239,24 @@ class InventoryModule(BaseInventoryPlugin):
         self._read_config_data(path)
         self._configure_hcloud_client()
         self._test_hcloud_token()
-        self._add_groups()
         self._get_servers()
         self._filter_servers()
+
+        # Add a top group 'hcloud'
+        self.inventory.add_group(group="hcloud")
+
         for server in self.servers:
-            self.inventory.add_host(server.name)
-            self.inventory.add_host(server.name, group="location_" + server.datacenter.location.name)
-            self.inventory.add_host(server.name, group="image_" + server.image.os_flavor)
-            self.inventory.add_host(server.name, group="server_type_" + server.server_type.name)
+            self.inventory.add_host(server.name, group="hcloud")
             self._set_server_attributes(server)
+
+            # Use constructed if applicable
+            strict = self.get_option('strict')
+
+            # Composed variables
+            self._set_composite_vars(self.get_option('compose'), self.inventory.get_host(server.name).get_vars(), server.name, strict=strict)
+
+            # Complex groups based on jinja2 conditionals, hosts that meet the conditional are added to group
+            self._add_host_to_composed_groups(self.get_option('groups'), {}, server.name, strict=strict)
+
+            # Create groups based on variable values and add the corresponding hosts to it
+            self._add_host_to_keyed_groups(self.get_option('keyed_groups'), {}, server.name, strict=strict)

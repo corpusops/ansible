@@ -23,6 +23,7 @@
 - name: get result of install package (check mode)
   win_command: choco.exe list --local-only --exact --limit-output {{ test_choco_package1|quote }}
   register: install_actual_check
+  failed_when: not install_actual_check.rc in [0, 2]  # v0.10.12+ returns 2 for no package
 
 - name: assert install package (check mode)
   assert:
@@ -54,6 +55,7 @@
     - (install_actual_info.stdout|from_json).force_x86 == False
     - (install_actual_info.stdout|from_json).ignore_checksums == False
     - (install_actual_info.stdout|from_json).install_args == None
+    - (install_actual_info.stdout|from_json).override_args == False
     - (install_actual_info.stdout|from_json).package_params == {}
     - (install_actual_info.stdout|from_json).proxy_url == None
     - (install_actual_info.stdout|from_json).source == "normal"
@@ -96,6 +98,7 @@
 - name: get result of remove package
   win_command: choco.exe list --local-only --exact --limit-output {{ test_choco_package1|quote }}
   register: remove_actual
+  failed_when: not remove_actual.rc in [0, 2]
 
 - name: check if removed package file still exists
   win_stat:
@@ -149,6 +152,7 @@
     - (install_multiple_package1.stdout|from_json).force_x86 == False
     - (install_multiple_package1.stdout|from_json).ignore_checksums == False
     - (install_multiple_package1.stdout|from_json).install_args == None
+    - (install_multiple_package1.stdout|from_json).override_args == False
     - (install_multiple_package1.stdout|from_json).package_params == {}
     - (install_multiple_package1.stdout|from_json).proxy_url == None
     - (install_multiple_package1.stdout|from_json).source == "normal"
@@ -158,6 +162,7 @@
     - (install_multiple_package2.stdout|from_json).force_x86 == False
     - (install_multiple_package2.stdout|from_json).ignore_checksums == False
     - (install_multiple_package2.stdout|from_json).install_args == None
+    - (install_multiple_package2.stdout|from_json).override_args == False
     - (install_multiple_package2.stdout|from_json).package_params == {}
     - (install_multiple_package2.stdout|from_json).proxy_url == None
     - (install_multiple_package2.stdout|from_json).source == "normal"
@@ -183,6 +188,7 @@
 - name: get list of installed packages after removal
   win_command: choco.exe list --local-only --limit-output ansible
   register: remove_multiple_actual
+  failed_when: not remove_multiple_actual.rc in [0, 2]
 
 - name: get info on package 1
   win_stat:
@@ -218,6 +224,7 @@
     name: '{{ test_choco_package1 }}'
     state: present
     install_args: /install_arg 1 /install_arg 2
+    override_args: yes
     package_params: /param1 /param2:value
     allow_empty_checksums: yes
     architecture: x86
@@ -245,6 +252,7 @@
     - (install_params_info.stdout|from_json).force_x86 == True
     - (install_params_info.stdout|from_json).ignore_checksums == True
     - (install_params_info.stdout|from_json).install_args == "/install_arg 1 /install_arg 2"
+    - (install_params_info.stdout|from_json).override_args == True
     - (install_params_info.stdout|from_json).package_params.keys()|count == 2
     - (install_params_info.stdout|from_json).package_params.param1 == True
     - (install_params_info.stdout|from_json).package_params.param2 == "value"
@@ -465,14 +473,15 @@
   register: allow_multiple
 
 - name: get result of install older package with allow_multiple
-  win_command: choco.exe list --local-only --limit-output --all-versions --exact {{ test_choco_package1|quote }}
+  win_command: choco.exe list --local-only --limit-output --all-versions
   register: allow_multiple_actual
 
 - name: assert install older package with allow_multiple
   assert:
     that:
     - allow_multiple is changed
-    - allow_multiple_actual.stdout == "ansible|0.1.0\r\nansible|0.0.1\r\n"
+    - '"ansible|0.1.0" in allow_multiple_actual.stdout_lines'
+    - '"ansible|0.0.1" in allow_multiple_actual.stdout_lines'
 
 - name: pin 2 packages (check mode)
   win_chocolatey:
@@ -590,11 +599,12 @@
   register: remove_multiple
 
 - name: get result of uninstall specific version installed with allow_multiple
-  win_command: choco.exe list --local-only --limit-output --all-versions --exact {{ test_choco_package1|quote }}
+  win_command: choco.exe list --local-only --limit-output --all-versions
   register: remove_multiple_actual
 
 - name: assert uninstall specific version installed with allow_multiple
   assert:
     that:
     - remove_multiple is changed
-    - remove_multiple_actual.stdout == "ansible|0.1.0\r\n"
+    - '"ansible|0.0.1" not in remove_multiple_actual.stdout_lines'
+    - '"ansible|0.1.0" in remove_multiple_actual.stdout_lines'

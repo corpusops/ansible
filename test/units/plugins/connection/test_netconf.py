@@ -20,16 +20,12 @@
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
-import sys
-import re
-import json
-import pytest
-
 from io import StringIO
+import sys
+import pytest
 
 from units.compat import unittest
 from units.compat.mock import patch, MagicMock, PropertyMock
-from ansible.errors import AnsibleConnectionFailure
 from ansible.playbook.play_context import PlayContext
 
 pytest.importorskip("ncclient")
@@ -59,11 +55,20 @@ else:
 
 class TestNetconfConnectionClass(unittest.TestCase):
 
+    def test_netconf_connection_module(self):
+        play_context = PlayContext()
+        play_context.prompt = (
+            '[sudo via ansible, key=ouzmdnewuhucvuaabtjmweasarviygqq] password: '
+        )
+        in_stream = StringIO()
+
+        self.assertIsInstance(netconf.Connection(play_context, in_stream), netconf.Connection)
+
     def test_netconf_init(self):
         pc = PlayContext()
         conn = connection_loader.get('netconf', pc, '/dev/null')
 
-        self.assertEqual('default', conn._network_os)
+        self.assertEqual('auto', conn._network_os)
         self.assertIsNone(conn._manager)
         self.assertFalse(conn._connected)
 

@@ -16,6 +16,9 @@
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+from __future__ import (absolute_import, division, print_function)
+__metaclass__ = type
+
 ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['preview'],
                     'supported_by': 'community'}
@@ -29,6 +32,10 @@ description:
     - Setting the Timestamp Format of Logs.
       Configuring the Device to Output Logs to the Log Buffer.
 author: QijunPan (@QijunPan)
+notes:
+    - This module requires the netconf system service be enabled on the remote device being managed.
+    - Recommended connection is C(netconf).
+    - This module also works with C(local) connections for legacy playbooks.
 options:
     log_time_stamp:
         description:
@@ -274,7 +281,7 @@ class InfoCenterLog(object):
         root = ElementTree.fromstring(xml_str)
 
         # get global param info
-        glb = root.find("data/syslog/globalParam")
+        glb = root.find("syslog/globalParam")
         if glb:
             for attr in glb:
                 if attr.tag in ["bufferSize", "logTimeStamp", "icLogBuffEn"]:
@@ -282,7 +289,7 @@ class InfoCenterLog(object):
 
         # get info-center source info
         log_dict["source"] = dict()
-        src = root.find("data/syslog/icSources/icSource")
+        src = root.find("syslog/icSources/icSource")
         if src:
             for attr in src:
                 if attr.tag in ["moduleName", "icChannelId", "icChannelName", "logEnFlg", "logEnLevel"]:

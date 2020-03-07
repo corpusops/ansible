@@ -73,16 +73,18 @@ options:
         required: false
         default: unix:/var/snap/lxd/common/lxd/unix.socket
         version_added: '2.8'
-    key_file:
+    client_key:
         description:
           - The client certificate key file path.
         required: false
         default: '"{}/.config/lxc/client.key" .format(os.environ["HOME"])'
-    cert_file:
+        aliases: [ key_file ]
+    client_cert:
         description:
           - The client certificate file path.
         required: false
         default: '"{}/.config/lxc/client.crt" .format(os.environ["HOME"])'
+        aliases: [ cert_file ]
     trust_password:
         description:
           - The client trusted password.
@@ -123,9 +125,9 @@ EXAMPLES = '''
   - name: create macvlan profile
     lxd_profile:
       url: https://127.0.0.1:8443
-      # These cert_file and key_file values are equal to the default values.
-      #cert_file: "{{ lookup('env', 'HOME') }}/.config/lxc/client.crt"
-      #key_file: "{{ lookup('env', 'HOME') }}/.config/lxc/client.key"
+      # These client_cert and client_key values are equal to the default values.
+      #client_cert: "{{ lookup('env', 'HOME') }}/.config/lxc/client.crt"
+      #client_key: "{{ lookup('env', 'HOME') }}/.config/lxc/client.key"
       trust_password: mypassword
       name: macvlan
       state: present
@@ -180,6 +182,8 @@ import os
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.lxd import LXDClient, LXDClientException
 
+# ANSIBLE_LXD_DEFAULT_URL is a default value of the lxd endpoint
+ANSIBLE_LXD_DEFAULT_URL = 'unix:/var/lib/lxd/unix.socket'
 
 # PROFILE_STATES is a list for states supported
 PROFILES_STATES = [
@@ -205,12 +209,14 @@ class LXDProfileManagement(object):
         self.state = self.module.params['state']
         self.new_name = self.module.params.get('new_name', None)
 
-        self.key_file = self.module.params.get('key_file', None)
-        self.cert_file = self.module.params.get('cert_file', None)
+        self.key_file = self.module.params.get('client_key', None)
+        self.cert_file = self.module.params.get('client_cert', None)
         self.debug = self.module._verbosity >= 4
 
         try:
-            if os.path.exists(self.module.params['snap_url'].replace('unix:', '')):
+            if self.module.params['url'] != ANSIBLE_LXD_DEFAULT_URL:
+                self.url = self.module.params['url']
+            elif os.path.exists(self.module.params['snap_url'].replace('unix:', '')):
                 self.url = self.module.params['snap_url']
             else:
                 self.url = self.module.params['url']
@@ -364,19 +370,21 @@ def main():
             ),
             url=dict(
                 type='str',
-                default='unix:/var/lib/lxd/unix.socket'
+                default=ANSIBLE_LXD_DEFAULT_URL
             ),
             snap_url=dict(
                 type='str',
                 default='unix:/var/snap/lxd/common/lxd/unix.socket'
             ),
-            key_file=dict(
+            client_key=dict(
                 type='str',
-                default='{0}/.config/lxc/client.key'.format(os.environ['HOME'])
+                default='{0}/.config/lxc/client.key'.format(os.environ['HOME']),
+                aliases=['key_file']
             ),
-            cert_file=dict(
+            client_cert=dict(
                 type='str',
-                default='{0}/.config/lxc/client.crt'.format(os.environ['HOME'])
+                default='{0}/.config/lxc/client.crt'.format(os.environ['HOME']),
+                aliases=['cert_file']
             ),
             trust_password=dict(type='str', no_log=True)
         ),

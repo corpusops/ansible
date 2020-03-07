@@ -20,12 +20,11 @@ using System.Web.Script.Serialization;
 // loaded in PSCore, ignore CS1702 so the code will ignore this warning
 //NoWarn -Name CS1702 -CLR Core
 
-//AssemblyReference -Name Newtonsoft.Json.dll -CLR Core
-//AssemblyReference -Name System.ComponentModel.Primitives.dll -CLR Core
-//AssemblyReference -Name System.Diagnostics.EventLog.dll -CLR Core
-//AssemblyReference -Name System.IO.FileSystem.AccessControl.dll -CLR Core
-//AssemblyReference -Name System.Security.Principal.Windows.dll -CLR Core
-//AssemblyReference -Name System.Security.AccessControl.dll -CLR Core
+//AssemblyReference -Type Newtonsoft.Json.JsonConvert -CLR Core
+//AssemblyReference -Type System.Diagnostics.EventLog -CLR Core
+//AssemblyReference -Type System.Security.AccessControl.NativeObjectSecurity -CLR Core
+//AssemblyReference -Type System.Security.AccessControl.DirectorySecurity -CLR Core
+//AssemblyReference -Type System.Security.Principal.IdentityReference -CLR Core
 
 //AssemblyReference -Name System.Web.Extensions.dll -CLR Framework
 
@@ -78,6 +77,7 @@ namespace Ansible.Basic
             { "aliases", new List<object>() { typeof(List<string>), typeof(List<string>) } },
             { "choices", new List<object>() { typeof(List<object>), typeof(List<object>) } },
             { "default", new List<object>() { null, null } },
+            { "deprecated_aliases", new List<object>() { typeof(List<Hashtable>), typeof(List<Hashtable>) } },
             { "elements", new List<object>() { null, null } },
             { "mutually_exclusive", new List<object>() { typeof(List<List<string>>), null } },
             { "no_log", new List<object>() { false, typeof(bool) } },
@@ -304,7 +304,8 @@ namespace Ansible.Basic
                 }
                 catch (System.Security.SecurityException)
                 {
-                    Warn(String.Format("Access error when creating EventLog source {0}, logging to the Application source instead", logSource));
+                    // Cannot call Warn as that calls LogEvent and we get stuck in a loop
+                    warnings.Add(String.Format("Access error when creating EventLog source {0}, logging to the Application source instead", logSource));
                     logSource = "Application";
                 }
             }
@@ -315,7 +316,16 @@ namespace Ansible.Basic
             using (EventLog eventLog = new EventLog("Application"))
             {
                 eventLog.Source = logSource;
-                eventLog.WriteEntry(message, logEntryType, 0);
+                try
+                {
+                    eventLog.WriteEntry(message, logEntryType, 0);
+                }
+                catch (System.InvalidOperationException) { }  // Ignore permission errors on the Application event log
+                catch (System.Exception e)
+                {
+                    // Cannot call Warn as that calls LogEvent and we get stuck in a loop
+                    warnings.Add(String.Format("Unknown error when creating event log entry: {0}", e.Message));
+                }
             }
         }
 
@@ -325,7 +335,7 @@ namespace Ansible.Basic
             LogEvent(String.Format("[WARNING] {0}", message), EventLogEntryType.Warning);
         }
 
-        public static Dictionary<string, object> FromJson(string json) { return FromJson<Dictionary<string, object>>(json); }
+        public static object FromJson(string json) { return FromJson<object>(json); }
         public static T FromJson<T>(string json)
         {
 #if CORECLR
@@ -366,7 +376,7 @@ namespace Ansible.Basic
             if (args.Length > 0)
             {
                 string inputJson = File.ReadAllText(args[0]);
-                Dictionary<string, object> rawParams = FromJson(inputJson);
+                Dictionary<string, object> rawParams = FromJson<Dictionary<string, object>>(inputJson);
                 if (!rawParams.ContainsKey("ANSIBLE_MODULE_ARGS"))
                     throw new ArgumentException("Module was unable to get ANSIBLE_MODULE_ARGS value from the argument path json");
                 return (IDictionary)rawParams["ANSIBLE_MODULE_ARGS"];
@@ -675,6 +685,27 @@ namespace Ansible.Basic
                     if (parameters.Contains(alias))
                         parameters[k] = parameters[alias];
                 }
+
+                List<Hashtable> deprecatedAliases = (List<Hashtable>)v["deprecated_aliases"];
+                foreach (Hashtable depInfo in deprecatedAliases)
+                {
+                    foreach (string keyName in new List<string> { "name", "version" })
+                    {
+                        if (!depInfo.ContainsKey(keyName))
+                        {
+                            string msg = String.Format("{0} is required in a deprecated_aliases entry", keyName);
+                            throw new ArgumentException(FormatOptionsContext(msg, " - "));
+                        }
+                    }
+                    string aliasName = (string)depInfo["name"];
+                    string depVersion = (string)depInfo["version"];
+
+                    if (parameters.Contains(aliasName))
+                    {
+                        string msg = String.Format("Alias '{0}' is deprecated. See the module docs for more information", aliasName);
+                        Deprecate(FormatOptionsContext(msg, " - "), depVersion);
+                    }
+                }
             }
 
             return aliasResults;
@@ -690,8 +721,9 @@ namespace Ansible.Basic
                 if ((bool)v["no_log"])
                 {
                     object noLogObject = parameters.Contains(k) ? parameters[k] : null;
-                    if (noLogObject != null)
-                        noLogValues.Add(noLogObject.ToString());
+                    string noLogString = noLogObject == null ? "" : noLogObject.ToString();
+                    if (!String.IsNullOrEmpty(noLogString))
+                        noLogValues.Add(noLogString);
                 }
 
                 object removedInVersion = v["removed_in_version"];
@@ -777,6 +809,8 @@ namespace Ansible.Basic
                                                        k, choiceMsg, String.Join(", ", choices), String.Join(", ", diffList));
                             FailJson(FormatOptionsContext(msg));
                         }
+                        /*
+                        For now we will just silently accept case insensitive choices, uncomment this if we want to add it back in
                         else if (caseDiffList.Count > 0)
                         {
                             // For backwards compatibility with Legacy.psm1 we need to be matching choices that are not case sensitive.
@@ -786,7 +820,7 @@ namespace Ansible.Basic
                                 k, choiceMsg, String.Join(", ", choices), String.Join(", ", caseDiffList.Select(x => RemoveNoLogValues(x, noLogValues)))
                             );
                             Warn(FormatOptionsContext(msg));
-                        }
+                        }*/
                     }
                 }
             }
@@ -861,6 +895,8 @@ namespace Ansible.Basic
                 FailJson(msg);
             }
 
+            /*
+            // Uncomment when we want to start warning users around options that are not a case sensitive match to the spec
             if (caseUnsupportedParameters.Count > 0)
             {
                 legalInputs.RemoveAll(x => passVars.Keys.Contains(x.Replace("_ansible_", "")));
@@ -868,7 +904,7 @@ namespace Ansible.Basic
                 msg = String.Format("{0}. Module options will become case sensitive in a future Ansible release. Supported parameters include: {1}",
                     FormatOptionsContext(msg), String.Join(", ", legalInputs));
                 Warn(msg);
-            }
+            }*/
 
             // Make sure we convert all the incorrect case params to the ones set by the module spec
             foreach (string key in caseUnsupportedParameters)
@@ -1031,7 +1067,7 @@ namespace Ansible.Basic
 
                 if (missing.Count > 0)
                 {
-                    string msg =  String.Format("missing parameter(s) required by '{0}': {1}", key, String.Join(", ", missing));
+                    string msg = String.Format("missing parameter(s) required by '{0}': {1}", key, String.Join(", ", missing));
                     FailJson(FormatOptionsContext(msg));
                 }
             }
@@ -1245,7 +1281,7 @@ namespace Ansible.Basic
                     return "VALUE_SPECIFIED_IN_NO_LOG_PARAMETER";
                 foreach (string omitMe in noLogStrings)
                     if (stringValue.Contains(omitMe))
-                        return (stringValue).Replace(omitMe, new String('*', omitMe.Length));
+                        return (stringValue).Replace(omitMe, "********");
                 value = stringValue;
             }
             return value;
@@ -1298,4 +1334,3 @@ namespace Ansible.Basic
         }
     }
 }
-

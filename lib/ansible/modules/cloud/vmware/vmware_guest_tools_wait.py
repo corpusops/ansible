@@ -31,12 +31,14 @@ options:
    name:
      description:
      - Name of the VM for which to wait until the tools become available.
-     - This is required if uuid is not supplied.
+     - This is required if C(uuid) or C(moid) is not supplied.
+     type: str
    name_match:
      description:
      - If multiple VMs match the name, use the first or last found.
      default: 'first'
      choices: ['first', 'last']
+     type: str
    folder:
      description:
      - Destination folder, absolute or relative path to find an existing guest.
@@ -52,16 +54,30 @@ options:
      - '   folder: /folder1/datacenter1/vm'
      - '   folder: folder1/datacenter1/vm'
      - '   folder: /folder1/datacenter1/vm/folder2'
+     type: str
    uuid:
      description:
      - UUID of the VM  for which to wait until the tools become available, if known. This is VMware's unique identifier.
-     - This is required, if C(name) is not supplied.
+     - This is required, if C(name) or C(moid) is not supplied.
+     type: str
+   moid:
+     description:
+     - Managed Object ID of the instance to manage if known, this is a unique identifier only within a single vCenter instance.
+     - This is required if C(name) or C(uuid) is not supplied.
+     version_added: '2.9'
+     type: str
    use_instance_uuid:
      description:
-     - Whether to use the VMWare instance UUID rather than the BIOS UUID.
+     - Whether to use the VMware instance UUID rather than the BIOS UUID.
      default: no
      type: bool
      version_added: '2.8'
+   timeout:
+     description:
+     - Max duration of the waiting period (seconds).
+     default: 500
+     type: int
+     version_added: '2.10'
 extends_documentation_fragment: vmware.documentation
 '''
 
@@ -73,7 +89,7 @@ EXAMPLES = '''
     password: "{{ vcenter_password }}"
     validate_certs: no
     datacenter: "{{ datacenter }}"
-    folder: /"{{datacenter}}"/vm
+    folder: "/{{datacenter}}/vm"
     name: "{{ vm_name }}"
   delegate_to: localhost
   register: vm_facts
@@ -89,6 +105,16 @@ EXAMPLES = '''
   register: facts
 
 
+- name: Wait for VMware tools to become available by MoID
+  vmware_guest_tools_wait:
+    hostname: "{{ vcenter_hostname }}"
+    username: "{{ vcenter_username }}"
+    password: "{{ vcenter_password }}"
+    validate_certs: no
+    moid: vm-42
+  delegate_to: localhost
+  register: facts
+
 - name: Wait for VMware tools to become available by name
   vmware_guest_tools_wait:
     hostname: "{{ vcenter_hostname }}"
@@ -96,7 +122,7 @@ EXAMPLES = '''
     password: "{{ vcenter_password }}"
     validate_certs: no
     name: test-vm
-    folder: /"{{datacenter}}"/vm
+    folder: "/{{datacenter}}/vm"
   delegate_to: localhost
   register: facts
 '''
@@ -109,6 +135,7 @@ instance:
     sample: None
 """
 
+import datetime
 import time
 
 from ansible.module_utils.basic import AnsibleModule
@@ -123,26 +150,20 @@ class PyVmomiHelper(PyVmomi):
     def gather_facts(self, vm):
         return gather_vm_facts(self.content, vm)
 
-    def wait_for_tools(self, vm, poll=100, sleep=5):
+    def wait_for_tools(self, vm, timeout):
         tools_running = False
         vm_facts = {}
-        poll_num = 0
-        while not tools_running and poll_num <= poll:
+        start_at = datetime.datetime.now()
+
+        while start_at + timeout > datetime.datetime.now():
             newvm = self.get_vm()
             vm_facts = self.gather_facts(newvm)
             if vm_facts['guest_tools_status'] == 'guestToolsRunning':
-                tools_running = True
-            else:
-                time.sleep(sleep)
-                poll_num += 1
+                return {'changed': True, 'failed': False, 'instance': vm_facts}
+            time.sleep(5)
 
         if not tools_running:
-            return {'failed': True, 'msg': 'VMware tools either not present or not running after {0} seconds'.format((poll * sleep))}
-
-        changed = False
-        if poll_num > 0:
-            changed = True
-        return {'changed': changed, 'failed': False, 'instance': vm_facts}
+            return {'failed': True, 'msg': 'VMware tools either not present or not running after {0} seconds'.format(timeout.total_seconds())}
 
 
 def main():
@@ -152,11 +173,16 @@ def main():
         name_match=dict(type='str', default='first', choices=['first', 'last']),
         folder=dict(type='str'),
         uuid=dict(type='str'),
+        moid=dict(type='str'),
         use_instance_uuid=dict(type='bool', default=False),
+        timeout=dict(type='int', default=500),
     )
     module = AnsibleModule(
         argument_spec=argument_spec,
-        required_one_of=[['name', 'uuid']])
+        required_one_of=[
+            ['name', 'uuid', 'moid']
+        ]
+    )
 
     if module.params['folder']:
         # FindByInventoryPath() does not require an absolute path
@@ -168,13 +194,14 @@ def main():
     vm = pyv.get_vm()
 
     if not vm:
-        module.fail_json(msg="Unable to wait for VMware tools for "
-                             "non-existing VM '%s'." % (module.params.get('name') or
-                                                        module.params.get('uuid')))
+        vm_id = module.params.get('name') or module.params.get('uuid') or module.params.get('moid')
+        module.fail_json(msg="Unable to wait for VMware tools for non-existing VM '%s'." % vm_id)
+
+    timeout = datetime.timedelta(seconds=module.params['timeout'])
 
     result = dict(changed=False)
     try:
-        result = pyv.wait_for_tools(vm)
+        result = pyv.wait_for_tools(vm, timeout)
     except Exception as e:
         module.fail_json(msg="Waiting for VMware tools failed with"
                              " exception: {0:s}".format(to_native(e)))

@@ -138,7 +138,7 @@ class HttpApi(HttpApiBase):
                 device_info['network_os_image'] = match_file_name.group(1)
                 break
 
-        match_os_platform = re.search(r'NAME: "Chassis",\s*DESCR:.*\nPID:\s*(\S+)', platform_reply, re.M)
+        match_os_platform = re.search(r'NAME: (?:"Chassis"| Chassis ),\s*DESCR:.*\nPID:\s*(\S+)', platform_reply, re.M)
         if match_os_platform:
             device_info['network_os_platform'] = match_os_platform.group(1)
 
@@ -178,7 +178,11 @@ def handle_response(response):
     if response['ins_api'].get('outputs'):
         for output in to_list(response['ins_api']['outputs']['output']):
             if output['code'] != '200':
-                raise ConnectionError('%s: %s' % (output['input'], output['msg']), code=output['code'])
+                # Best effort messages: some API output keys may not exist on some platforms
+                input_data = output.get('input', '')
+                msg = output.get('msg', '')
+                clierror = output.get('clierror', '')
+                raise ConnectionError('%s: %s: %s' % (input_data, msg, clierror), code=output['code'])
             elif 'body' in output:
                 result = output['body']
                 if isinstance(result, dict):

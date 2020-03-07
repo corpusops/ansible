@@ -127,7 +127,7 @@ options:
     suboptions:
       filename:
         description:
-          - The filename to be used to store the backup configuration. If the the filename
+          - The filename to be used to store the backup configuration. If the filename
             is not given it will be generated based on the hostname, current time and date
             in format defined by <hostname>_config.<current-date>@<current-time>
       dir_path:
@@ -279,9 +279,9 @@ def run(module, result):
         contents = module.params['config']
         if not contents:
             contents = get_config(module)
-            config = NetworkConfig(indent=1, contents=contents)
-            configobjs = candidate.difference(config, path=path, match=match,
-                                              replace=replace)
+        config = NetworkConfig(indent=1, contents=contents)
+        configobjs = candidate.difference(config, path=path, match=match,
+                                          replace=replace)
 
     else:
         configobjs = candidate.items

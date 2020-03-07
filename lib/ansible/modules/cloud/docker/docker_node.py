@@ -59,6 +59,7 @@ options:
             - If I(labels_state) is C(replace) and I(labels) is not provided or empty then all labels assigned to
               node are removed and I(labels_to_remove) is ignored.
         type: list
+        elements: str
     availability:
         description: Node availability to assign. If not provided then node availability remains unchanged.
         choices:
@@ -76,7 +77,7 @@ extends_documentation_fragment:
   - docker
   - docker.docker_py_1_documentation
 requirements:
-  - "docker-py >= 2.4.0"
+  - "L(Docker SDK for Python,https://docker-py.readthedocs.io/en/stable/) >= 2.4.0"
   - Docker API >= 1.25
 author:
   - Piotr Wojciechowski (@WojciechowskiPiotr)
@@ -122,21 +123,24 @@ EXAMPLES = '''
 '''
 
 RETURN = '''
-node_facts:
+node:
   description: Information about node after 'update' operation
   returned: success
   type: dict
 
 '''
 
+import traceback
+
 try:
-    from docker.errors import APIError
+    from docker.errors import DockerException, APIError
 except ImportError:
-    # missing docker-py handled in ansible.module_utils.docker.common
+    # missing Docker SDK for Python handled in ansible.module_utils.docker.common
     pass
 
 from ansible.module_utils.docker.common import (
     DockerBaseClass,
+    RequestException,
 )
 
 from ansible.module_utils._text import to_native
@@ -253,10 +257,10 @@ class SwarmNodeManager(DockerBaseClass):
                                             node_spec=node_spec)
                 except APIError as exc:
                     self.client.fail("Failed to update node : %s" % to_native(exc))
-            self.results['node_facts'] = self.client.get_node_inspect(node_id=node_info['ID'])
+            self.results['node'] = self.client.get_node_inspect(node_id=node_info['ID'])
             self.results['changed'] = changed
         else:
-            self.results['node_facts'] = node_info
+            self.results['node'] = node_info
             self.results['changed'] = changed
 
 
@@ -277,12 +281,17 @@ def main():
         min_docker_api_version='1.25',
     )
 
-    results = dict(
-        changed=False,
-    )
+    try:
+        results = dict(
+            changed=False,
+        )
 
-    SwarmNodeManager(client, results)
-    client.module.exit_json(**results)
+        SwarmNodeManager(client, results)
+        client.module.exit_json(**results)
+    except DockerException as e:
+        client.fail('An unexpected docker error occurred: {0}'.format(e), exception=traceback.format_exc())
+    except RequestException as e:
+        client.fail('An unexpected requests error occurred when docker-py tried to talk to the docker daemon: {0}'.format(e), exception=traceback.format_exc())
 
 
 if __name__ == '__main__':

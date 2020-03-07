@@ -16,6 +16,9 @@
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+from __future__ import (absolute_import, division, print_function)
+__metaclass__ = type
+
 ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['preview'],
                     'supported_by': 'community'}
@@ -29,6 +32,9 @@ description:
     - Manages SNMP traps configurations on HUAWEI CloudEngine switches.
 author:
     - wangdezhuang (@QijunPan)
+notes:
+    - Recommended connection is C(network_cli).
+    - This module also works with C(local) connections for legacy playbooks.
 options:
     feature_name:
         description:
@@ -127,7 +133,8 @@ updates:
 
 
 from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils.network.cloudengine.ce import get_config, load_config, ce_argument_spec, run_commands
+from ansible.module_utils.network.cloudengine.ce import load_config, ce_argument_spec, run_commands
+from ansible.module_utils.connection import exec_command
 
 
 class SnmpTraps(object):
@@ -174,6 +181,22 @@ class SnmpTraps(object):
         cmd1 = 'display interface brief'
         commands.append(cmd1)
         self.interface = run_commands(self.module, commands)
+
+    def get_config(self, flags=None):
+        """Retrieves the current config from the device or cache
+        """
+        flags = [] if flags is None else flags
+
+        cmd = 'display current-configuration '
+        cmd += ' '.join(flags)
+        cmd = cmd.strip()
+
+        rc, out, err = exec_command(self.module, cmd)
+        if rc != 0:
+            self.module.fail_json(msg=err)
+        cfg = str(out).strip()
+
+        return cfg
 
     def check_args(self):
         """ Check invalid args """
@@ -291,6 +314,9 @@ class SnmpTraps(object):
             else:
                 del self.end_state["snmp-agent trap"]
                 del self.end_state["undo snmp-agent trap"]
+        if self.end_state == self.existing:
+            self.changed = False
+            self.updates_cmd = list()
 
     def cli_load_config(self, commands):
         """ Load configure through cli """
@@ -304,7 +330,7 @@ class SnmpTraps(object):
         regular = "| include snmp | include trap"
         flags = list()
         flags.append(regular)
-        tmp_cfg = get_config(self.module, flags)
+        tmp_cfg = self.get_config(flags)
 
         return tmp_cfg
 

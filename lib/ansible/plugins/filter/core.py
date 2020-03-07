@@ -36,7 +36,7 @@ import yaml
 
 import datetime
 from functools import partial
-from random import Random, SystemRandom, shuffle, random
+from random import Random, SystemRandom, shuffle
 
 from jinja2.filters import environmentfilter, do_groupby as _do_groupby
 
@@ -45,9 +45,10 @@ from ansible.module_utils.six import iteritems, string_types, integer_types, rer
 from ansible.module_utils.six.moves import reduce, shlex_quote
 from ansible.module_utils._text import to_bytes, to_native, to_text
 from ansible.module_utils.common.collections import is_sequence
-from ansible.module_utils.common._collections_compat import Mapping, MutableMapping
+from ansible.module_utils.common._collections_compat import Mapping
 from ansible.parsing.ajson import AnsibleJSONEncoder
 from ansible.parsing.yaml.dumper import AnsibleDumper
+from ansible.template import recursive_check_defined
 from ansible.utils.display import Display
 from ansible.utils.encrypt import passlib_or_crypt
 from ansible.utils.hashing import md5s, checksum_s
@@ -61,7 +62,8 @@ UUID_NAMESPACE_ANSIBLE = uuid.UUID('361E6D51-FAEC-444A-9079-341386DA8E2E')
 
 def to_yaml(a, *args, **kw):
     '''Make verbose, human readable yaml'''
-    transformed = yaml.dump(a, Dumper=AnsibleDumper, allow_unicode=True, **kw)
+    default_flow_style = kw.pop('default_flow_style', None)
+    transformed = yaml.dump(a, Dumper=AnsibleDumper, allow_unicode=True, default_flow_style=default_flow_style, **kw)
     return to_text(transformed)
 
 
@@ -121,15 +123,16 @@ def fileglob(pathname):
     return [g for g in glob.glob(pathname) if os.path.isfile(g)]
 
 
-def regex_replace(value='', pattern='', replacement='', ignorecase=False):
+def regex_replace(value='', pattern='', replacement='', ignorecase=False, multiline=False):
     ''' Perform a `re.sub` returning a string '''
 
     value = to_text(value, errors='surrogate_or_strict', nonstring='simplerepr')
 
+    flags = 0
     if ignorecase:
-        flags = re.I
-    else:
-        flags = 0
+        flags |= re.I
+    if multiline:
+        flags |= re.M
     _re = re.compile(pattern, flags=flags)
     return _re.sub(replacement, value)
 
@@ -274,11 +277,18 @@ def get_encrypted_password(password, hashtype='sha512', salt=None, salt_size=Non
         reraise(AnsibleFilterError, AnsibleFilterError(to_native(e), orig_exc=e), sys.exc_info()[2])
 
 
-def to_uuid(string):
-    return str(uuid.uuid5(UUID_NAMESPACE_ANSIBLE, str(string)))
+def to_uuid(string, namespace=UUID_NAMESPACE_ANSIBLE):
+    uuid_namespace = namespace
+    if not isinstance(uuid_namespace, uuid.UUID):
+        try:
+            uuid_namespace = uuid.UUID(namespace)
+        except (AttributeError, ValueError) as e:
+            raise AnsibleFilterError("Invalid value '%s' for 'namespace': %s" % (to_native(namespace), to_native(e)))
+    # uuid.uuid5() requires bytes on Python 2 and bytes or text or Python 3
+    return to_text(uuid.uuid5(uuid_namespace, to_native(string, errors='surrogate_or_strict')))
 
 
-def mandatory(a):
+def mandatory(a, msg=None):
     from jinja2.runtime import Undefined
 
     ''' Make a variable mandatory '''
@@ -287,28 +297,46 @@ def mandatory(a):
             name = "'%s' " % to_text(a._undefined_name)
         else:
             name = ''
-        raise AnsibleFilterError("Mandatory variable %s not defined." % name)
+
+        if msg is not None:
+            raise AnsibleFilterError(to_native(msg))
+        else:
+            raise AnsibleFilterError("Mandatory variable %s not defined." % name)
+
     return a
 
 
 def combine(*terms, **kwargs):
-    recursive = kwargs.get('recursive', False)
-    if len(kwargs) > 1 or (len(kwargs) == 1 and 'recursive' not in kwargs):
-        raise AnsibleFilterError("'recursive' is the only valid keyword argument")
+    recursive = kwargs.pop('recursive', False)
+    list_merge = kwargs.pop('list_merge', 'replace')
+    if kwargs:
+        raise AnsibleFilterError("'recursive' and 'list_merge' are the only valid keyword arguments")
 
-    dicts = []
-    for t in terms:
-        if isinstance(t, MutableMapping):
-            dicts.append(t)
-        elif isinstance(t, list):
-            dicts.append(combine(*t, **kwargs))
-        else:
-            raise AnsibleFilterError("|combine expects dictionaries, got " + repr(t))
+    # allow the user to do `[dict1, dict2, ...] | combine`
+    dictionaries = flatten(terms, levels=1)
 
-    if recursive:
-        return reduce(merge_hash, dicts)
-    else:
-        return dict(itertools.chain(*map(iteritems, dicts)))
+    # recursively check that every elements are defined (for jinja2)
+    recursive_check_defined(dictionaries)
+
+    if not dictionaries:
+        return {}
+
+    if len(dictionaries) == 1:
+        return dictionaries[0]
+
+    # merge all the dicts so that the dict at the end of the array have precedence
+    # over the dict at the beginning.
+    # we merge the dicts from the highest to the lowest priority because there is
+    # a huge probability that the lowest priority dict will be the biggest in size
+    # (as the low prio dict will hold the "default" values and the others will be "patches")
+    # and merge_hash create a copy of it's first argument.
+    # so high/right -> low/left is more efficient than low/left -> high/right
+    high_to_low_prio_dict_iterator = reversed(dictionaries)
+    result = next(high_to_low_prio_dict_iterator)
+    for dictionary in high_to_low_prio_dict_iterator:
+        result = merge_hash(dictionary, result, recursive, list_merge)
+
+    return result
 
 
 def comment(text, style='plain', **kw):
@@ -394,19 +422,18 @@ def comment(text, style='plain', **kw):
         str_end)
 
 
-def extract(item, container, morekeys=None):
-    from jinja2.runtime import Undefined
+@environmentfilter
+def extract(environment, item, container, morekeys=None):
+    if morekeys is None:
+        keys = [item]
+    elif isinstance(morekeys, list):
+        keys = [item] + morekeys
+    else:
+        keys = [item, morekeys]
 
-    value = container[item]
-
-    if value is not Undefined and morekeys is not None:
-        if not isinstance(morekeys, list):
-            morekeys = [morekeys]
-
-        try:
-            value = reduce(lambda d, k: d[k], morekeys, value)
-        except KeyError:
-            value = Undefined()
+    value = container
+    for key in keys:
+        value = environment.getitem(value, key)
 
     return value
 
@@ -529,37 +556,15 @@ def list_of_dict_key_value_elements_to_dict(mylist, key_name='key', value_name='
     return dict((item[key_name], item[value_name]) for item in mylist)
 
 
-def random_mac(value):
-    ''' takes string prefix, and return it completed with random bytes
-        to get a complete 6 bytes MAC address '''
-
-    if not isinstance(value, string_types):
-        raise AnsibleFilterError('Invalid value type (%s) for random_mac (%s)' % (type(value), value))
-
-    value = value.lower()
-    mac_items = value.split(':')
-
-    if len(mac_items) > 5:
-        raise AnsibleFilterError('Invalid value (%s) for random_mac: 5 colon(:) separated items max' % value)
-
-    err = ""
-    for mac in mac_items:
-        if len(mac) == 0:
-            err += ",empty item"
-            continue
-        if not re.match('[a-f0-9]{2}', mac):
-            err += ",%s not hexa byte" % mac
-    err = err.strip(',')
-
-    if len(err):
-        raise AnsibleFilterError('Invalid value (%s) for random_mac: %s' % (value, err))
-
-    # Generate random float and make it int
-    v = int(random() * 10.0**10)
-    # Select first n chars to complement input prefix
-    remain = 2 * (6 - len(mac_items))
-    rnd = ('%x' % v)[:remain]
-    return value + re.sub(r'(..)', r':\1', rnd)
+def path_join(paths):
+    ''' takes a sequence or a string, and return a concatenation
+        of the different members '''
+    if isinstance(paths, string_types):
+        return os.path.join(paths)
+    elif is_sequence(paths):
+        return os.path.join(*paths)
+    else:
+        raise AnsibleFilterError("|path_join expects string or sequence, got %s instead." % type(paths))
 
 
 class FilterModule(object):
@@ -593,6 +598,7 @@ class FilterModule(object):
             'dirname': partial(unicode_wrap, os.path.dirname),
             'expanduser': partial(unicode_wrap, os.path.expanduser),
             'expandvars': partial(unicode_wrap, os.path.expandvars),
+            'path_join': path_join,
             'realpath': partial(unicode_wrap, os.path.realpath),
             'relpath': partial(unicode_wrap, os.path.relpath),
             'splitext': partial(unicode_wrap, os.path.splitext),
@@ -653,7 +659,4 @@ class FilterModule(object):
             'dict2items': dict_to_list_of_dict_key_value_elements,
             'items2dict': list_of_dict_key_value_elements_to_dict,
             'subelements': subelements,
-
-            # Misc
-            'random_mac': random_mac,
         }

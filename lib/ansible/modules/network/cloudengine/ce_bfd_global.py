@@ -16,6 +16,9 @@
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+from __future__ import (absolute_import, division, print_function)
+__metaclass__ = type
+
 ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['preview'],
                     'supported_by': 'community'}
@@ -28,6 +31,10 @@ short_description: Manages BFD global configuration on HUAWEI CloudEngine device
 description:
     - Manages BFD global configuration on HUAWEI CloudEngine devices.
 author: QijunPan (@QijunPan)
+notes:
+  - This module requires the netconf system service be enabled on the remote device being managed.
+  - Recommended connection is C(netconf).
+  - This module also works with C(local) connections for legacy playbooks.
 options:
     bfd_enable:
         description:
@@ -281,10 +288,11 @@ class BfdGlobal(object):
         root = ElementTree.fromstring(xml_str)
 
         # get bfd global info
-        glb = root.find("data/bfd/bfdSchGlobal")
+        glb = root.find("bfd/bfdSchGlobal")
         if glb:
             for attr in glb:
-                bfd_dict["global"][attr.tag] = attr.text
+                if attr.text is not None:
+                    bfd_dict["global"][attr.tag] = attr.text
 
         return bfd_dict
 
@@ -495,6 +503,8 @@ class BfdGlobal(object):
             return
 
         self.end_state["global"] = bfd_dict.get("global")
+        if self.existing == self.end_state:
+            self.changed = False
 
     def work(self):
         """worker"""

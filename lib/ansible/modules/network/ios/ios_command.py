@@ -111,6 +111,7 @@ tasks:
       wait_for:
         - result[0] contains IOS
         - result[1] contains Loopback0
+
   - name: run commands that require answering a prompt
     ios_command:
       commands:
@@ -146,7 +147,7 @@ from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.network.common.parsing import Conditional
 from ansible.module_utils.network.common.utils import transform_commands, to_lines
 from ansible.module_utils.network.ios.ios import run_commands
-from ansible.module_utils.network.ios.ios import ios_argument_spec, check_args
+from ansible.module_utils.network.ios.ios import ios_argument_spec
 
 
 def parse_commands(module, warnings):
@@ -184,7 +185,6 @@ def main():
 
     warnings = list()
     result = {'changed': False, 'warnings': warnings}
-    check_args(module, warnings)
     commands = parse_commands(module, warnings)
     wait_for = module.params['wait_for'] or list()
 
@@ -198,7 +198,7 @@ def main():
     match = module.params['match']
 
     while retries > 0:
-        responses, timestamps = run_commands(module, commands, return_timestamps=True)
+        responses = run_commands(module, commands)
 
         for item in list(conditionals):
             if item(responses):
@@ -221,7 +221,6 @@ def main():
     result.update({
         'stdout': responses,
         'stdout_lines': list(to_lines(responses)),
-        'timestamps': timestamps
     })
 
     module.exit_json(**result)

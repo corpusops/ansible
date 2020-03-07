@@ -43,31 +43,53 @@ options:
       variable.
     - Please read the description of the C(username) option for a discussion of when this option is applicable.
     type: str
-  cert_file:
+  client_cert:
     description:
     - Path to a certificate used to authenticate with the API. Can also be specified via K8S_AUTH_CERT_FILE environment
       variable.
     type: path
-  key_file:
+    aliases: [ cert_file ]
+  client_key:
     description:
     - Path to a key file used to authenticate with the API. Can also be specified via K8S_AUTH_KEY_FILE environment
       variable.
     type: path
-  ssl_ca_cert:
+    aliases: [ key_file ]
+  ca_cert:
     description:
     - Path to a CA certificate used to authenticate with the API. The full certificate chain must be provided to
       avoid certificate validation errors. Can also be specified via K8S_AUTH_SSL_CA_CERT environment variable.
     type: path
-  verify_ssl:
+    aliases: [ ssl_ca_cert ]
+  validate_certs:
     description:
     - Whether or not to verify the API server's SSL certificates. Can also be specified via K8S_AUTH_VERIFY_SSL
       environment variable.
     type: bool
+    aliases: [ verify_ssl ]
+  proxy:
+    description:
+    - The URL of an HTTP proxy to use for the connection. Can also be specified via K8S_AUTH_PROXY environment variable.
+    - Please note that this module does not pick up typical proxy settings from the environment (e.g. HTTP_PROXY).
+    version_added: "2.9"
+  persist_config:
+    description:
+    - Whether or not to save the kube config refresh tokens.
+      Can also be specified via K8S_AUTH_PERSIST_CONFIG environment variable.
+    - When the k8s context is using a user credentials with refresh tokens (like oidc or gke/gcloud auth),
+      the token is refreshed by the k8s python client library but not saved by default. So the old refresh token can
+      expire and the next auth might fail. Setting this flag to true will tell the k8s python client to save the
+      new refresh token to the kube config file.
+    - Default to false.
+    - Please note that the current version of the k8s python client library does not support setting this flag to True yet.
+    - "The fix for this k8s python library is here: https://github.com/kubernetes-client/python-base/pull/169"
+    type: bool
+    version_added: "2.10"
 notes:
   - "The OpenShift Python client wraps the K8s Python client, providing full access to
     all of the APIS and models available on both platforms. For API version details and
     additional information visit https://github.com/openshift/openshift-restclient-python"
-  - "To avoid SSL certificate validation errors when C(verify_ssl) is I(True), the full
-    certificate chain for the API server must be provided via C(ssl_ca_cert) or in the
+  - "To avoid SSL certificate validation errors when C(validate_certs) is I(True), the full
+    certificate chain for the API server must be provided via C(ca_cert) or in the
     kubeconfig file."
 '''

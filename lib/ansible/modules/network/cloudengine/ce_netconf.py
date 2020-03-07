@@ -16,6 +16,9 @@
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+from __future__ import (absolute_import, division, print_function)
+__metaclass__ = type
+
 ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['preview'],
                     'supported_by': 'community'}
@@ -29,6 +32,10 @@ description:
     - Sends an arbitrary netconf command on HUAWEI CloudEngine switches.
 author:
     - wangdezhuang (@QijunPan)
+notes:
+    - This module requires the netconf system service be enabled on the remote device being managed.
+    - Recommended connection is C(netconf).
+    - This module also works with C(local) connections for legacy playbooks.
 options:
     rpc:
         description:
@@ -180,7 +187,7 @@ def main():
         if "<data/>" in response:
             end_state["result"] = "<data/>"
         else:
-            tmp1 = response.xml.split(r"<data>")
+            tmp1 = response.split(r"<data>")
             tmp2 = tmp1[1].split(r"</data>")
             result = tmp2[0].split("\n")
 

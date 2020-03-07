@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """Make sure the data in BOTMETA.yml is valid"""
+from __future__ import (absolute_import, division, print_function)
+__metaclass__ = type
 
 import glob
 import os
@@ -7,12 +9,10 @@ import re
 import sys
 import yaml
 
-from voluptuous import Any, MultipleInvalid, Required, Schema
+from voluptuous import All, Any, Match, MultipleInvalid, Required, Schema
 from voluptuous.humanize import humanize_error
 
 from ansible.module_utils.six import string_types
-
-list_string_types = list(string_types)
 
 
 def main():
@@ -25,9 +25,11 @@ def main():
     except yaml.error.MarkedYAMLError as ex:
         print('%s:%d:%d: YAML load failed: %s' % (path, ex.context_mark.line + 1, ex.context_mark.column + 1, re.sub(r'\s+', ' ', str(ex))))
         sys.exit()
-    except Exception as ex:
+    except Exception as ex:  # pylint: disable=broad-except
         print('%s:%d:%d: YAML load failed: %s' % (path, 0, 0, re.sub(r'\s+', ' ', str(ex))))
         sys.exit()
+
+    list_string_types = list(string_types)
 
     files_schema = Any(
         Schema(*string_types),
@@ -36,6 +38,10 @@ def main():
             'keywords': Any(list_string_types, *string_types),
             'labels': Any(list_string_types, *string_types),
             'maintainers': Any(list_string_types, *string_types),
+            'migrated_to': All(
+                Any(*string_types),
+                Match(r'^\w+\.\w+$'),
+            ),
             'notified': Any(list_string_types, *string_types),
             'supershipit': Any(list_string_types, *string_types),
             'support': Any("core", "network", "community"),
@@ -72,16 +78,6 @@ def main():
         if macro.startswith('team_'):
             continue
         path_macros.append(macro)
-
-    # Ensure all `files` correspond to a file
-    for file in botmeta['files']:
-        for macro in path_macros:
-            file = file.replace('$' + macro, botmeta.get('macros', {}).get(macro, ''))
-        if not os.path.exists(file):
-            # Not a file or directory, though maybe the prefix to one?
-            # https://github.com/ansible/ansibullbot/pull/1023
-            if not glob.glob('%s*' % file):
-                print("%s:%d:%d: Can't find '%s.*' in this branch" % (path, 0, 0, file))
 
 
 if __name__ == '__main__':

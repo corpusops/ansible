@@ -38,7 +38,7 @@ DOCUMENTATION = """
         type: bool
         default: 'no'
       subkey:
-        description: Return a specific subkey of the password.
+        description: Return a specific subkey of the password. When set to C(password), always returns the first line.
         default: password
       userpass:
         description: Specify a password to save, instead of a generated one.
@@ -78,7 +78,7 @@ EXAMPLES = """
     msg: "{{ lookup('passwordstore', 'example/test create=true overwrite=true')}}"
 
 - name: Create an alphanumeric password
-  debug: msg="{{ lookup('passwordstore', 'example/test create=true nosymbols=true) }}"
+  debug: msg="{{ lookup('passwordstore', 'example/test create=true nosymbols=true') }}"
 
 - name: Return the value for user in the KV pair user, username
   debug:

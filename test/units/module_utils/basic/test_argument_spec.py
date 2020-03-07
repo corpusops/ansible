@@ -12,12 +12,12 @@ import os
 
 import pytest
 
-from units.compat.mock import MagicMock, patch
+from units.compat.mock import MagicMock
 from ansible.module_utils import basic
-from ansible.module_utils.six import string_types, integer_types
+from ansible.module_utils.common.warnings import get_deprecation_messages, get_warning_messages
+from ansible.module_utils.six import integer_types
 from ansible.module_utils.six.moves import builtins
 
-from units.mock.procenv import ModuleTestCase, swap_stdin_and_argv
 
 MOCK_VALIDATOR_FAIL = MagicMock(side_effect=TypeError("bad conversion"))
 # Data is argspec, argument, expected
@@ -69,9 +69,10 @@ VALID_SPECS = (
 
 INVALID_SPECS = (
     # Type is int; unable to convert this string
-    ({'arg': {'type': 'int'}}, {'arg': "bad"}, "invalid literal for int() with base 10: 'bad'"),
+    ({'arg': {'type': 'int'}}, {'arg': "wolf"}, "is of type {0} and we were unable to convert to int: {0} cannot be converted to an int".format(type('bad'))),
     # Type is list elements is int; unable to convert this string
-    ({'arg': {'type': 'list', 'elements': 'int'}}, {'arg': [1, "bad"]}, "invalid literal for int() with base 10: 'bad'"),
+    ({'arg': {'type': 'list', 'elements': 'int'}}, {'arg': [1, "bad"]}, "is of type {0} and we were unable to convert to int: {0} cannot be converted to "
+                                                                        "an int".format(type('int'))),
     # Type is int; unable to convert float
     ({'arg': {'type': 'int'}}, {'arg': 42.1}, "'float'> cannot be converted to an int"),
     # Type is list, elements is int; unable to convert float
@@ -94,13 +95,17 @@ def complex_argspec():
         foo=dict(required=True, aliases=['dup']),
         bar=dict(),
         bam=dict(),
+        bing=dict(),
+        bang=dict(),
+        bong=dict(),
         baz=dict(fallback=(basic.env_fallback, ['BAZ'])),
         bar1=dict(type='bool'),
         bar3=dict(type='list', elements='path'),
         zardoz=dict(choices=['one', 'two']),
         zardoz2=dict(type='list', choices=['one', 'two', 'three']),
+        zardoz3=dict(type='str', aliases=['zodraz'], deprecated_aliases=[dict(name='zodraz', version='9.99')]),
     )
-    mut_ex = (('bar', 'bam'),)
+    mut_ex = (('bar', 'bam'), ('bing', 'bang', 'bong'))
     req_to = (('bam', 'baz'),)
 
     kwargs = dict(
@@ -137,7 +142,7 @@ def options_argspec_list():
             elements='dict',
             options=options_spec,
             mutually_exclusive=[
-                ['bam', 'bam1']
+                ['bam', 'bam1'],
             ],
             required_if=[
                 ['foo', 'hello', ['bam']],
@@ -229,6 +234,14 @@ class TestComplexArgSpecs:
         assert isinstance(am.params['foo'], str)
         assert am.params['foo'] == 'hello'
 
+    @pytest.mark.parametrize('stdin', [{'foo': 'hello1', 'dup': 'hello2'}], indirect=['stdin'])
+    def test_complex_duplicate_warning(self, stdin, complex_argspec):
+        """Test that the complex argspec issues a warning if we specify an option both with its canonical name and its alias"""
+        am = basic.AnsibleModule(**complex_argspec)
+        assert isinstance(am.params['foo'], str)
+        assert 'Both option foo and its alias dup are set.' in get_warning_messages()
+        assert am.params['foo'] == 'hello2'
+
     @pytest.mark.parametrize('stdin', [{'foo': 'hello', 'bam': 'test'}], indirect=['stdin'])
     def test_complex_type_fallback(self, mocker, stdin, complex_argspec):
         """Test that the complex argspec works if we get a required parameter via fallback"""
@@ -241,7 +254,7 @@ class TestComplexArgSpecs:
         assert isinstance(am.params['baz'], str)
         assert am.params['baz'] == 'test data'
 
-    @pytest.mark.parametrize('stdin', [{'foo': 'hello', 'bar': 'bad', 'bam': 'bad2'}], indirect=['stdin'])
+    @pytest.mark.parametrize('stdin', [{'foo': 'hello', 'bar': 'bad', 'bam': 'bad2', 'bing': 'a', 'bang': 'b', 'bong': 'c'}], indirect=['stdin'])
     def test_fail_mutually_exclusive(self, capfd, stdin, complex_argspec):
         """Fail because of mutually exclusive parameters"""
         with pytest.raises(SystemExit):
@@ -251,7 +264,7 @@ class TestComplexArgSpecs:
         results = json.loads(out)
 
         assert results['failed']
-        assert results['msg'] == "parameters are mutually exclusive: bar, bam"
+        assert results['msg'] == "parameters are mutually exclusive: bar|bam, bing|bang|bong"
 
     @pytest.mark.parametrize('stdin', [{'foo': 'hello', 'bam': 'bad2'}], indirect=['stdin'])
     def test_fail_required_together(self, capfd, stdin, complex_argspec):
@@ -320,6 +333,14 @@ class TestComplexArgSpecs:
         assert isinstance(am.params['bar3'], list)
         assert am.params['bar3'][0].startswith('/')
         assert am.params['bar3'][1] == 'test/'
+
+    @pytest.mark.parametrize('stdin', [{'foo': 'hello', 'zodraz': 'one'}], indirect=['stdin'])
+    def test_deprecated_alias(self, capfd, mocker, stdin, complex_argspec):
+        """Test a deprecated alias"""
+        am = basic.AnsibleModule(**complex_argspec)
+
+        assert "Alias 'zodraz' is deprecated." in get_deprecation_messages()[0]['msg']
+        assert get_deprecation_messages()[0]['version'] == '9.99'
 
 
 class TestComplexOptions:
@@ -403,7 +424,7 @@ class TestComplexOptions:
         ({'foobar': [{"foo": "hello", "bam": "good", "invalid": "bad"}]}, 'module: invalid found in foobar. Supported parameters include'),
         # Mutually exclusive options found
         ({'foobar': [{"foo": "test", "bam": "bad", "bam1": "bad", "baz": "req_to"}]},
-         'parameters are mutually exclusive: bam, bam1 found in foobar'),
+         'parameters are mutually exclusive: bam|bam1 found in foobar'),
         # required_if fails
         ({'foobar': [{"foo": "hello", "bar": "bad"}]},
          'foo is hello but all of the following are missing: bam found in foobar'),
@@ -427,7 +448,7 @@ class TestComplexOptions:
          'module: invalid found in foobar. Supported parameters include'),
         # Mutually exclusive options found
         ({'foobar': {"foo": "test", "bam": "bad", "bam1": "bad", "baz": "req_to"}},
-         'parameters are mutually exclusive: bam, bam1 found in foobar'),
+         'parameters are mutually exclusive: bam|bam1 found in foobar'),
         # required_if fails
         ({'foobar': {"foo": "hello", "bar": "bad"}},
          'foo is hello but all of the following are missing: bam found in foobar'),
@@ -573,3 +594,40 @@ class TestLoadFileCommonArguments:
         res = am.load_file_common_arguments(params=extended_params)
 
         assert res == final_params
+
+
+@pytest.mark.parametrize("stdin", [{"arg_pass": "testing"}], indirect=["stdin"])
+def test_no_log_true(stdin, capfd):
+    """Explicitly mask an argument (no_log=True)."""
+    arg_spec = {
+        "arg_pass": {"no_log": True}
+    }
+    am = basic.AnsibleModule(arg_spec)
+    # no_log=True is picked up by both am._log_invocation and list_no_log_values
+    # (called by am._handle_no_log_values). As a result, we can check for the
+    # value in am.no_log_values.
+    assert "testing" in am.no_log_values
+
+
+@pytest.mark.parametrize("stdin", [{"arg_pass": "testing"}], indirect=["stdin"])
+def test_no_log_false(stdin, capfd):
+    """Explicitly log and display an argument (no_log=False)."""
+    arg_spec = {
+        "arg_pass": {"no_log": False}
+    }
+    am = basic.AnsibleModule(arg_spec)
+    assert "testing" not in am.no_log_values and not get_warning_messages()
+
+
+@pytest.mark.parametrize("stdin", [{"arg_pass": "testing"}], indirect=["stdin"])
+def test_no_log_none(stdin, capfd):
+    """Allow Ansible to make the decision by matching the argument name
+    against PASSWORD_MATCH."""
+    arg_spec = {
+        "arg_pass": {}
+    }
+    am = basic.AnsibleModule(arg_spec)
+    # Omitting no_log is only picked up by _log_invocation, so the value never
+    # makes it into am.no_log_values. Instead we can check for the warning
+    # emitted by am._log_invocation.
+    assert len(get_warning_messages()) > 0

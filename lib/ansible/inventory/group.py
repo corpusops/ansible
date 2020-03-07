@@ -22,8 +22,9 @@ from itertools import chain
 from ansible import constants as C
 from ansible.errors import AnsibleError
 from ansible.module_utils._text import to_native, to_text
-
+from ansible.module_utils.common._collections_compat import Mapping, MutableMapping
 from ansible.utils.display import Display
+from ansible.utils.vars import combine_vars
 
 display = Display()
 
@@ -31,16 +32,31 @@ display = Display()
 def to_safe_group_name(name, replacer="_", force=False, silent=False):
     # Converts 'bad' characters in a string to underscores (or provided replacer) so they can be used as Ansible hosts or groups
 
+    warn = ''
     if name:  # when deserializing we might not have name yet
         invalid_chars = C.INVALID_VARIABLE_NAMES.findall(name)
         if invalid_chars:
             msg = 'invalid character(s) "%s" in group name (%s)' % (to_text(set(invalid_chars)), to_text(name))
-            if C.TRANSFORM_INVALID_GROUP_CHARS or force:
+            if C.TRANSFORM_INVALID_GROUP_CHARS not in ('never', 'ignore') or force:
                 name = C.INVALID_VARIABLE_NAMES.sub(replacer, name)
-                if not silent:
-                    display.warning('Replacing ' + msg)
+                if not (silent or C.TRANSFORM_INVALID_GROUP_CHARS == 'silently'):
+                    display.vvvv('Replacing ' + msg)
+                    warn = 'Invalid characters were found in group names and automatically replaced, use -vvvv to see details'
             else:
-                display.deprecated('Ignoring ' + msg, version='2.12')
+                if C.TRANSFORM_INVALID_GROUP_CHARS == 'never':
+                    display.vvvv('Not replacing %s' % msg)
+                    warn = True
+                    warn = 'Invalid characters were found in group names but not replaced, use -vvvv to see details'
+
+                # remove this message after 2.10 AND changing the default to 'always'
+                group_chars_setting, group_chars_origin = C.config.get_config_value_and_origin('TRANSFORM_INVALID_GROUP_CHARS')
+                if group_chars_origin == 'default':
+                    display.deprecated('The TRANSFORM_INVALID_GROUP_CHARS settings is set to allow bad characters in group names by default,'
+                                       ' this will change, but still be user configurable on deprecation', version='2.10')
+
+    if warn:
+        display.warning(warn)
+
     return name
 
 
@@ -230,7 +246,10 @@ class Group:
         if key == 'ansible_group_priority':
             self.set_priority(int(value))
         else:
-            self.vars[key] = value
+            if key in self.vars and isinstance(self.vars[key], MutableMapping) and isinstance(value, Mapping):
+                self.vars[key] = combine_vars(self.vars[key], value)
+            else:
+                self.vars[key] = value
 
     def clear_hosts_cache(self):
 

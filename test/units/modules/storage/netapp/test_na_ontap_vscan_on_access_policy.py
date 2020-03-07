@@ -8,7 +8,7 @@ import json
 import pytest
 
 from units.compat import unittest
-from units.compat.mock import patch, Mock
+from units.compat.mock import patch
 from ansible.module_utils import basic
 from ansible.module_utils._text import to_bytes
 import ansible.module_utils.netapp as netapp_utils
@@ -17,7 +17,7 @@ from ansible.modules.storage.netapp.na_ontap_vscan_on_access_policy \
     import NetAppOntapVscanOnAccessPolicy as policy_module  # module under test
 
 if not netapp_utils.has_netapp_lib():
-    pytestmark = pytest.skip('skipping as missing required netapp_lib')
+    pytestmark = pytest.mark.skip('skipping as missing required netapp_lib')
 HAS_NETAPP_ZAPI_MSG = "pip install netapp_lib is required"
 
 

@@ -16,7 +16,6 @@ module: ucs_ip_pool
 short_description: Configures IP address pools on Cisco UCS Manager
 description:
 - Configures IP address pools and blocks of IP addresses on Cisco UCS Manager.
-- Examples can be used with the UCS Platform Emulator U(https://communities.cisco.com/ucspe).
 extends_documentation_fragment: ucs
 options:
   state:
@@ -32,13 +31,13 @@ options:
     - "You cannot use spaces or any special characters other than - (hyphen), \"_\" (underscore), : (colon), and . (period)."
     - You cannot change this name after the IP address pool is created.
     required: yes
-  descrption:
+  description:
     description:
     - The user-defined description of the IP address pool.
     - Enter up to 256 characters.
     - "You can use any characters or spaces except the following:"
     - "` (accent mark), \ (backslash), ^ (carat), \" (double quote), = (equal sign), > (greater than), < (less than), or ' (single quote)."
-    aliases: [ descr ]
+    aliases: [ descr, descrption ]
   order:
     description:
     - The Assignment Order field.
@@ -159,7 +158,7 @@ def main():
     argument_spec.update(
         org_dn=dict(type='str', default='org-root'),
         name=dict(type='str', required=True),
-        descr=dict(type='str', default=''),
+        descr=dict(type='str', default='', aliases=['descrption', 'description']),
         order=dict(type='str', default='default', choices=['default', 'sequential']),
         first_addr=dict(type='str'),
         last_addr=dict(type='str'),

@@ -21,7 +21,7 @@ version_added: "2.8"
 short_description: Send direct requests to an ACME server
 description:
    - "Allows to send direct requests to an ACME server with the
-      L(ACME protocol,https://tools.ietf.org/html/draft-ietf-acme-acme-18),
+      L(ACME protocol,https://tools.ietf.org/html/rfc8555),
       which is supported by CAs such as L(Let's Encrypt,https://letsencrypt.org/)."
    - "This module can be used to debug failed certificate request attempts,
       for example when M(acme_certificate) fails or encounters a problem which
@@ -41,11 +41,11 @@ notes:
       url=https://acme-v02.api.letsencrypt.org/acme/acct/1\")"
 seealso:
   - name: Automatic Certificate Management Environment (ACME)
-    description: The current draft specification of the ACME protocol.
-    link: https://tools.ietf.org/html/draft-ietf-acme-acme-18
+    description: The specification of the ACME protocol (RFC 8555).
+    link: https://tools.ietf.org/html/rfc8555
   - name: ACME TLS ALPN Challenge Extension
-    description: The current draft specification of the C(tls-alpn-01) challenge.
-    link: https://tools.ietf.org/html/draft-ietf-acme-tls-alpn-05
+    description: The specification of the C(tls-alpn-01) challenge (RFC 8737).
+    link: https://www.rfc-editor.org/rfc/rfc8737.html
 extends_documentation_fragment:
   - acme
 options:
@@ -124,7 +124,7 @@ EXAMPLES = r'''
   vars:
     account_info:
       # For valid values, see
-      # https://tools.ietf.org/html/draft-ietf-acme-acme-18#section-7.3
+      # https://tools.ietf.org/html/rfc8555#section-7.3
       contact:
       - mailto:me@example.com
 
@@ -246,7 +246,10 @@ output_json:
 '''
 
 from ansible.module_utils.acme import (
-    ModuleFailException, ACMEAccount, set_crypto_backend,
+    ModuleFailException,
+    ACMEAccount,
+    handle_standard_module_arguments,
+    get_default_argspec,
 )
 
 from ansible.module_utils.basic import AnsibleModule
@@ -256,20 +259,15 @@ import json
 
 
 def main():
+    argument_spec = get_default_argspec()
+    argument_spec.update(dict(
+        url=dict(type='str'),
+        method=dict(type='str', choices=['get', 'post', 'directory-only'], default='get'),
+        content=dict(type='str'),
+        fail_on_acme_error=dict(type='bool', default=True),
+    ))
     module = AnsibleModule(
-        argument_spec=dict(
-            account_key_src=dict(type='path', aliases=['account_key']),
-            account_key_content=dict(type='str', no_log=True),
-            account_uri=dict(type='str'),
-            acme_directory=dict(type='str', default='https://acme-staging.api.letsencrypt.org/directory'),
-            acme_version=dict(type='int', default=1, choices=[1, 2]),
-            validate_certs=dict(type='bool', default=True),
-            url=dict(type='str'),
-            method=dict(type='str', choices=['get', 'post', 'directory-only'], default='get'),
-            content=dict(type='str'),
-            fail_on_acme_error=dict(type='bool', default=True),
-            select_crypto_backend=dict(type='str', default='auto', choices=['auto', 'openssl', 'cryptography']),
-        ),
+        argument_spec=argument_spec,
         mutually_exclusive=(
             ['account_key_src', 'account_key_content'],
         ),
@@ -280,12 +278,7 @@ def main():
             ['method', 'post', ['account_key_src', 'account_key_content'], True],
         ),
     )
-    set_crypto_backend(module)
-
-    if not module.params.get('validate_certs'):
-        module.warn(warning='Disabling certificate validation for communications with ACME endpoint. ' +
-                            'This should only be done for testing against a local ACME server for ' +
-                            'development purposes, but *never* for production purposes.')
+    handle_standard_module_arguments(module)
 
     result = dict()
     changed = False

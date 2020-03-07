@@ -192,7 +192,7 @@ options:
     suboptions:
       filename:
         description:
-          - The filename to be used to store the backup configuration. If the the filename
+          - The filename to be used to store the backup configuration. If the filename
             is not given it will be generated based on the hostname, current time and date
             in format defined by <hostname>_config.<current-date>@<current-time>
       dir_path:
@@ -299,7 +299,6 @@ from ansible.module_utils.network.common.config import NetworkConfig, dumps
 from ansible.module_utils.network.eos.eos import get_config, load_config, get_connection
 from ansible.module_utils.network.eos.eos import run_commands
 from ansible.module_utils.network.eos.eos import eos_argument_spec
-from ansible.module_utils.network.eos.eos import check_args
 
 
 def get_candidate(module):
@@ -384,7 +383,6 @@ def main():
                            supports_check_mode=True)
 
     warnings = list()
-    check_args(module, warnings)
 
     result = {'changed': False}
     if warnings:
@@ -395,6 +393,10 @@ def main():
     contents = None
     flags = ['all'] if module.params['defaults'] else []
     connection = get_connection(module)
+
+    # Refuse to diff_against: session if sessions are disabled
+    if module.params['diff_against'] == 'session' and not connection.supports_sessions:
+        module.fail_json(msg="Cannot diff against sessions when sessions are disabled. Please change diff_against to another value")
 
     if module.params['backup'] or (module._diff and module.params['diff_against'] == 'running'):
         contents = get_config(module, flags=flags)
@@ -435,13 +437,16 @@ def main():
 
             response = load_config(module, commands, replace=replace, commit=commit)
 
-            if 'diff' in response and module.params['diff_against'] == 'session':
-                result['diff'] = {'prepared': response['diff']}
+            result['changed'] = True
+
+            if module.params['diff_against'] == 'session':
+                if 'diff' in response:
+                    result['diff'] = {'prepared': response['diff']}
+                else:
+                    result['changed'] = False
 
             if 'session' in response:
                 result['session'] = response['session']
-
-            result['changed'] = True
 
     running_config = module.params['running_config']
     startup_config = None

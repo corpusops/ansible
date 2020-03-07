@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from ansible.errors import AnsibleError, AnsibleConnectionFailure
 from ansible.module_utils._text import to_native, to_text
 from ansible.module_utils.common.collections import is_string
+from ansible.module_utils.common.validation import check_type_str
 from ansible.plugins.action import ActionBase
 from ansible.utils.display import Display
 
@@ -25,7 +26,16 @@ class TimedOutException(Exception):
 
 class ActionModule(ActionBase):
     TRANSFERS_FILES = False
-    _VALID_ARGS = frozenset(('connect_timeout', 'msg', 'post_reboot_delay', 'pre_reboot_delay', 'test_command', 'reboot_timeout', 'search_paths'))
+    _VALID_ARGS = frozenset((
+        'boot_time_command',
+        'connect_timeout',
+        'msg',
+        'post_reboot_delay',
+        'pre_reboot_delay',
+        'test_command',
+        'reboot_timeout',
+        'search_paths'
+    ))
 
     DEFAULT_REBOOT_TIMEOUT = 600
     DEFAULT_CONNECT_TIMEOUT = None
@@ -143,9 +153,9 @@ class ActionModule(ActionBase):
         err_msg = "'search_paths' must be a string or flat list of strings, got {0}"
         try:
             incorrect_type = any(not is_string(x) for x in search_paths)
-        except TypeError as te:
-            raise AnsibleError(err_msg.format(search_paths))
-        if not isinstance(search_paths, list) or incorrect_type:
+            if not isinstance(search_paths, list) or incorrect_type:
+                raise TypeError
+        except TypeError:
             raise AnsibleError(err_msg.format(search_paths))
 
         display.debug('{action}: running find module looking in {paths} to get path for "{command}"'.format(
@@ -178,6 +188,14 @@ class ActionModule(ActionBase):
 
     def get_system_boot_time(self, distribution):
         boot_time_command = self._get_value_from_facts('BOOT_TIME_COMMANDS', distribution, 'DEFAULT_BOOT_TIME_COMMAND')
+        if self._task.args.get('boot_time_command'):
+            boot_time_command = self._task.args.get('boot_time_command')
+
+            try:
+                check_type_str(boot_time_command, allow_conversion=False)
+            except TypeError as e:
+                raise AnsibleError("Invalid value given for 'boot_time_command': %s." % to_native(e))
+
         display.debug("{action}: getting boot time with command: '{command}'".format(action=self._task.action, command=boot_time_command))
         command_result = self._low_level_execute_command(boot_time_command, sudoable=self.DEFAULT_SUDOABLE)
 
@@ -293,7 +311,7 @@ class ActionModule(ActionBase):
             reboot_result = self._low_level_execute_command(reboot_command, sudoable=self.DEFAULT_SUDOABLE)
         except AnsibleConnectionFailure as e:
             # If the connection is closed too quickly due to the system being shutdown, carry on
-            display.debug('{action}: AnsibleConnectionFailure caught and handled: {error}'.format(action=self._task.action, error=to_native(e)))
+            display.debug('{action}: AnsibleConnectionFailure caught and handled: {error}'.format(action=self._task.action, error=to_text(e)))
             reboot_result['rc'] = 0
 
         result['start'] = datetime.utcnow()

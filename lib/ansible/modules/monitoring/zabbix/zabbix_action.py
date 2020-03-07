@@ -30,7 +30,7 @@ author:
     - Ruben Harutyunov (@K-DOT)
 
 requirements:
-    - zabbix-api
+    - "zabbix-api >= 0.5.4"
 
 options:
     name:
@@ -40,7 +40,8 @@ options:
     event_source:
         description:
             - Type of events that the action will handle.
-        required: true
+            - Required when C(state=present).
+        required: false
         choices: ['trigger', 'discovery', 'auto_registration', 'internal']
     state:
         description:
@@ -62,71 +63,87 @@ options:
         default: true
     esc_period:
         description:
-            - Default operation step duration. Must be greater than 60 seconds. Accepts seconds, time unit with suffix and user macro.
-        default: '60'
+            - Default operation step duration. Must be greater than 60 seconds.
+            - Accepts only seconds in int for <= Zabbix 3.2
+            - Accepts seconds, time unit with suffix and user macro since => Zabbix 3.4
+            - Required when C(state=present).
+        required: false
     conditions:
         type: list
         description:
             - List of dictionaries of conditions to evaluate.
             - For more information about suboptions of this option please
-              check out Zabbix API documentation U(https://www.zabbix.com/documentation/3.4/manual/api/reference/action/object#action_filter_condition)
+              check out Zabbix API documentation U(https://www.zabbix.com/documentation/4.0/manual/api/reference/action/object#action_filter_condition)
         suboptions:
             type:
-                description: Type (label) of the condition.
-                choices:
-                    # trigger
-                    - host_group
-                    - host
-                    - trigger
-                    - trigger_name
-                    - trigger_severity
-                    - time_period
-                    - host_template
-                    - application
-                    - maintenance_status
-                    - event_tag
-                    - event_tag_value
-                    # discovery
-                    - host_IP
-                    - discovered_service_type
-                    - discovered_service_port
-                    - discovery_status
-                    - uptime_or_downtime_duration
-                    - received_value
-                    - discovery_rule
-                    - discovery_check
-                    - proxy
-                    - discovery_object
-                    # auto_registration
-                    - proxy
-                    - host_name
-                    - host_metadata
-                    # internal
-                    - host_group
-                    - host
-                    - host_template
-                    - application
-                    - event_type
+                description:
+                    - Type (label) of the condition.
+                    - 'Possible values when I(event_source=trigger):'
+                    - ' - C(host_group)'
+                    - ' - C(host)'
+                    - ' - C(trigger)'
+                    - ' - C(trigger_name)'
+                    - ' - C(trigger_severity)'
+                    - ' - C(time_period)'
+                    - ' - C(host_template)'
+                    - ' - C(application)'
+                    - ' - C(maintenance_status)'
+                    - ' - C(event_tag)'
+                    - ' - C(event_tag_value)'
+                    - 'Possible values when I(event_source=discovery):'
+                    - ' - C(host_IP)'
+                    - ' - C(discovered_service_type)'
+                    - ' - C(discovered_service_port)'
+                    - ' - C(discovery_status)'
+                    - ' - C(uptime_or_downtime_duration)'
+                    - ' - C(received_value)'
+                    - ' - C(discovery_rule)'
+                    - ' - C(discovery_check)'
+                    - ' - C(proxy)'
+                    - ' - C(discovery_object)'
+                    - 'Possible values when I(event_source=auto_registration):'
+                    - ' - C(proxy)'
+                    - ' - C(host_name)'
+                    - ' - C(host_metadata)'
+                    - 'Possible values when I(event_source=internal):'
+                    - ' - C(host_group)'
+                    - ' - C(host)'
+                    - ' - C(host_template)'
+                    - ' - C(application)'
+                    - ' - C(event_type)'
             value:
                 description:
                     - Value to compare with.
-                    - When I(type) is set to C(discovery_status), the choices
-                      are C(up), C(down), C(discovered), C(lost).
-                    - When I(type) is set to C(discovery_object), the choices
-                      are C(host), C(service).
-                    - When I(type) is set to C(event_type), the choices
-                      are C(item in not supported state), C(item in normal state),
-                      C(LLD rule in not supported state),
-                      C(LLD rule in normal state), C(trigger in unknown state), C(trigger in normal state).
-                    - When I(type) is set to C(trigger_severity), the choices
-                      are (case-insensitive) C(not classified), C(information), C(warning), C(average), C(high), C(disaster)
-                      irrespective of user-visible names being changed in Zabbix. Defaults to C(not classified) if omitted.
-                    - Besides the above options, this is usualy either the name
+                    - 'When I(type=discovery_status), the choices are:'
+                    - ' - C(up)'
+                    - ' - C(down)'
+                    - ' - C(discovered)'
+                    - ' - C(lost)'
+                    - 'When I(type=discovery_object), the choices are:'
+                    - ' - C(host)'
+                    - ' - C(service)'
+                    - 'When I(type=event_type), the choices are:'
+                    - ' - C(item in not supported state)'
+                    - ' - C(item in normal state)'
+                    - ' - C(LLD rule in not supported state)'
+                    - ' - C(LLD rule in normal state)'
+                    - ' - C(trigger in unknown state)'
+                    - ' - C(trigger in normal state)'
+                    - 'When I(type=trigger_severity), the choices are (case-insensitive):'
+                    - ' - C(not classified)'
+                    - ' - C(information)'
+                    - ' - C(warning)'
+                    - ' - C(average)'
+                    - ' - C(high)'
+                    - ' - C(disaster)'
+                    - Irrespective of user-visible names being changed in Zabbix. Defaults to C(not classified) if omitted.
+                    - Besides the above options, this is usually either the name
                       of the object or a string to compare with.
             operator:
                 description:
                     - Condition operator.
                     - When I(type) is set to C(time_period), the choices are C(in), C(not in).
+                    - C(matches), C(does not match), C(Yes) and C(No) condition operators work only with >= Zabbix 4.0
                 choices:
                     - '='
                     - '<>'
@@ -136,6 +153,10 @@ options:
                     - '>='
                     - '<='
                     - 'not in'
+                    - 'matches'
+                    - 'does not match'
+                    - 'Yes'
+                    - 'No'
             formulaid:
                 description:
                     - Arbitrary unique ID that is used to reference the condition from a custom expression.
@@ -159,6 +180,8 @@ options:
             - The IDs used in the expression must exactly match the ones
               defined in the filter conditions. No condition can remain unused or omitted.
             - Required for custom expression filters.
+            - Use sequential IDs that start at "A". If non-sequential IDs are used, Zabbix re-indexes them.
+              This makes each module run notice the difference in IDs and update the action.
     default_message:
         description:
             - Problem message default text.
@@ -205,7 +228,8 @@ options:
                 description:
                     - Duration of an escalation step in seconds.
                     - Must be greater than 60 seconds.
-                    - Accepts seconds, time unit with suffix and user macro.
+                    - Accepts only seconds in int for <= Zabbix 3.2
+                    - Accepts seconds, time unit with suffix and user macro since => Zabbix 3.4
                     - If set to 0 or 0s, the default action escalation period will be used.
                 default: 0s
             esc_step_from:
@@ -227,9 +251,11 @@ options:
             message:
                 description:
                     - Operation message text.
+                    - Will check the 'default message' and use the text from I(default_message) if this and I(default_subject) are not specified
             subject:
                 description:
                     - Operation message subject.
+                    - Will check the 'default message' and use the text from I(default_subject) if this and I(default_subject) are not specified
             media_type:
                 description:
                     - Media type that will be used to send the message.
@@ -350,6 +376,7 @@ EXAMPLES = '''
     event_source: 'trigger'
     state: present
     status: enabled
+    esc_period: 60
     conditions:
       - type: 'trigger_severity'
         operator: '>='
@@ -372,6 +399,7 @@ EXAMPLES = '''
     event_source: 'trigger'
     state: present
     status: enabled
+    esc_period: 1m
     conditions:
       - type: 'trigger_name'
         operator: 'like'
@@ -389,6 +417,8 @@ EXAMPLES = '''
           - 'Admin'
       - type: remote_command
         command: 'systemctl restart zabbix-agent'
+        command_type: custom_script
+        execute_on: server
         run_on_hosts:
           - 0
 
@@ -402,6 +432,7 @@ EXAMPLES = '''
     event_source: 'trigger'
     state: present
     status: enabled
+    esc_period: 1h
     conditions:
       - type: 'trigger_severity'
         operator: '>='
@@ -435,13 +466,18 @@ msg:
     sample: 'Action Deleted: Register webservers, ID: 0001'
 '''
 
+
+import atexit
+import traceback
+
 try:
     from zabbix_api import ZabbixAPI
     HAS_ZABBIX_API = True
 except ImportError:
+    ZBX_IMP_ERR = traceback.format_exc()
     HAS_ZABBIX_API = False
 
-from ansible.module_utils.basic import AnsibleModule
+from ansible.module_utils.basic import AnsibleModule, missing_required_lib
 
 
 class Zapi(object):
@@ -770,7 +806,7 @@ class Action(object):
         self._zapi_wrapper = zapi_wrapper
 
     def _construct_parameters(self, **kwargs):
-        """Contruct parameters.
+        """Construct parameters.
 
         Args:
             **kwargs: Arbitrary keyword parameters.
@@ -801,10 +837,11 @@ class Action(object):
                 'enabled',
                 'disabled'], kwargs['status'])
         }
-        if float(self._zapi.api_version().rsplit('.', 1)[0]) >= 4.0:
-            _params['pause_suppressed'] = '1' if kwargs['pause_in_maintenance'] else '0'
-        else:
-            _params['maintenance_mode'] = '1' if kwargs['pause_in_maintenance'] else '0'
+        if kwargs['event_source'] == 'trigger':
+            if float(self._zapi.api_version().rsplit('.', 1)[0]) >= 4.0:
+                _params['pause_suppressed'] = '1' if kwargs['pause_in_maintenance'] else '0'
+            else:
+                _params['maintenance_mode'] = '1' if kwargs['pause_in_maintenance'] else '0'
 
         return _params
 
@@ -921,7 +958,7 @@ class Operations(object):
         """
         try:
             return {
-                'default_msg': '0' if 'message' in operation or 'subject' in operation else '1',
+                'default_msg': '0' if operation.get('message') is not None or operation.get('subject')is not None else '1',
                 'mediatypeid': self._zapi_wrapper.get_mediatype_by_mediatype_name(
                     operation.get('media_type')
                 ) if operation.get('media_type') is not None else '0',
@@ -1073,7 +1110,7 @@ class Operations(object):
             operation: operation to construct the conditions
 
         Returns:
-            list: constructed operaration conditions
+            list: constructed operation conditions
         """
         _opcond = operation.get('operation_condition')
         if _opcond is not None:
@@ -1177,8 +1214,6 @@ class RecoveryOperations(Operations):
         Returns:
             list: constructed recovery operations data
         """
-        if operations is None:
-            return None
         constructed_data = []
         for op in operations:
             operation_type = self._construct_operationtype(op)
@@ -1244,8 +1279,6 @@ class AcknowledgeOperations(Operations):
         Returns:
             list: constructed acknowledge operations data
         """
-        if operations is None:
-            return None
         constructed_data = []
         for op in operations:
             operation_type = self._construct_operationtype(op)
@@ -1387,7 +1420,11 @@ class Filter(object):
                 "in",
                 ">=",
                 "<=",
-                "not in"], _condition['operator']
+                "not in",
+                "matches",
+                "does not match",
+                "Yes",
+                "No"], _condition['operator']
             )
         except Exception as e:
             self._module.fail_json(msg="Unsupported value '%s' for operator." % _condition['operator'])
@@ -1594,7 +1631,7 @@ def compare_dictionaries(d1, d2, diff_dict):
     Used in recursion with compare_lists() function.
     Args:
         d1: first dictionary to compare
-        d2: second ditionary to compare
+        d2: second dictionary to compare
         diff_dict: dictionary to store the difference
 
     Returns:
@@ -1653,22 +1690,23 @@ def main():
             http_login_user=dict(type='str', required=False, default=None),
             http_login_password=dict(type='str', required=False, default=None, no_log=True),
             validate_certs=dict(type='bool', required=False, default=True),
-            esc_period=dict(type='int', required=False, default=60),
+            esc_period=dict(type='str', required=False),
             timeout=dict(type='int', default=10),
             name=dict(type='str', required=True),
-            event_source=dict(type='str', required=True, choices=['trigger', 'discovery', 'auto_registration', 'internal']),
+            event_source=dict(type='str', required=False, choices=['trigger', 'discovery', 'auto_registration', 'internal']),
             state=dict(type='str', required=False, default='present', choices=['present', 'absent']),
             status=dict(type='str', required=False, default='enabled', choices=['enabled', 'disabled']),
             pause_in_maintenance=dict(type='bool', required=False, default=True),
-            default_message=dict(type='str', required=False, default=None),
-            default_subject=dict(type='str', required=False, default=None),
-            recovery_default_message=dict(type='str', required=False, default=None),
-            recovery_default_subject=dict(type='str', required=False, default=None),
-            acknowledge_default_message=dict(type='str', required=False, default=None),
-            acknowledge_default_subject=dict(type='str', required=False, default=None),
+            default_message=dict(type='str', required=False, default=''),
+            default_subject=dict(type='str', required=False, default=''),
+            recovery_default_message=dict(type='str', required=False, default=''),
+            recovery_default_subject=dict(type='str', required=False, default=''),
+            acknowledge_default_message=dict(type='str', required=False, default=''),
+            acknowledge_default_subject=dict(type='str', required=False, default=''),
             conditions=dict(
                 type='list',
                 required=False,
+                default=[],
                 elements='dict',
                 options=dict(
                     formulaid=dict(type='str', required=False),
@@ -1683,6 +1721,7 @@ def main():
             operations=dict(
                 type='list',
                 required=False,
+                default=[],
                 elements='dict',
                 options=dict(
                     type=dict(
@@ -1702,7 +1741,7 @@ def main():
                             'set_host_inventory_mode',
                         ]
                     ),
-                    esc_period=dict(type='int', required=False),
+                    esc_period=dict(type='str', required=False),
                     esc_step_from=dict(type='int', required=False, default=1),
                     esc_step_to=dict(type='int', required=False, default=1),
                     operation_condition=dict(
@@ -1957,11 +1996,17 @@ def main():
                 ]
             )
         ),
+        required_if=[
+            ['state', 'present', [
+                'esc_period',
+                'event_source'
+            ]]
+        ],
         supports_check_mode=True
     )
 
     if not HAS_ZABBIX_API:
-        module.fail_json(msg="Missing required zabbix-api module (check docs or install with: pip install zabbix-api)")
+        module.fail_json(msg=missing_required_lib('zabbix-api', url='https://pypi.org/project/zabbix-api/'), exception=ZBX_IMP_ERR)
 
     server_url = module.params['server_url']
     login_user = module.params['login_user']
@@ -1993,6 +2038,7 @@ def main():
         zbx = ZabbixAPI(server_url, timeout=timeout, user=http_login_user,
                         passwd=http_login_password, validate_certs=validate_certs)
         zbx.login(login_user, login_password)
+        atexit.register(zbx.logout)
     except Exception as e:
         module.fail_json(msg="Failed to connect to Zabbix server: %s" % e)
 

@@ -59,7 +59,6 @@ Changelog:
 ######################################################################
 
 import argparse
-import ConfigParser
 import os
 import re
 from time import time
@@ -67,7 +66,8 @@ import xmlrpclib
 
 import json
 
-from six import iteritems
+from ansible.module_utils.six import iteritems
+from ansible.module_utils.six.moves import configparser as ConfigParser
 
 # NOTE -- this file assumes Ansible is being accessed FROM the cobbler
 # server, so it does not attempt to login with a username and password.
@@ -215,8 +215,7 @@ class CobblerInventory(object):
                 for (iname, ivalue) in iteritems(interfaces):
                     if ivalue['management'] or not ivalue['static']:
                         this_dns_name = ivalue.get('dns_name', None)
-                        if this_dns_name is not None and this_dns_name is not "":
-                            dns_name = this_dns_name
+                        dns_name = this_dns_name if this_dns_name else ''
 
             if dns_name == '' or dns_name is None:
                 continue

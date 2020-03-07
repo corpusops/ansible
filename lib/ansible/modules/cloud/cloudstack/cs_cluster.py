@@ -4,6 +4,9 @@
 # (c) 2016, René Moser <mail@renemoser.net>
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
+from __future__ import absolute_import, division, print_function
+__metaclass__ = type
+
 ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['stableinterface'],
                     'supported_by': 'community'}
@@ -42,8 +45,8 @@ options:
     description:
       - Name the hypervisor to be used.
       - Required if I(state=present).
+      - Possible values are C(KVM), C(VMware), C(BareMetal), C(XenServer), C(LXC), C(HyperV), C(UCS), C(OVM), C(Simulator).
     type: str
-    choices: [ KVM, VMware, BareMetal, XenServer, LXC, HyperV, UCS, OVM ]
   url:
     description:
       - URL for the cluster
@@ -206,7 +209,6 @@ from ansible.module_utils.cloudstack import (
     AnsibleCloudStack,
     cs_argument_spec,
     cs_required_together,
-    CS_HYPERVISORS
 )
 
 
@@ -350,7 +352,7 @@ def main():
         zone=dict(),
         pod=dict(),
         cluster_type=dict(choices=['CloudManaged', 'ExternalManaged']),
-        hypervisor=dict(choices=CS_HYPERVISORS),
+        hypervisor=dict(),
         state=dict(choices=['present', 'enabled', 'disabled', 'absent'], default='present'),
         url=dict(),
         username=dict(),
