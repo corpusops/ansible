@@ -8,12 +8,14 @@
     As for a long time we lived with a PR for ``include_role`` that exposed vars by default, we use that change to maintain compat in the meantime.
 - Included roles with tags in `meta/main.yml` make a role run more than neccesary:<br/>
     · [devel](https://github.com/corpusops/ansible/tree/include_role_cache_tags_devel)
+    · [2.10](https://github.com/corpusops/ansible/tree/include_role_cache_tags_bug_210)
     · [2.9](https://github.com/corpusops/ansible/tree/include_role_cache_tags_bug_29)
     · [2.7](https://github.com/corpusops/ansible/tree/include_role_cache_tags_bug_27)
     · [2.4](https://github.com/corpusops/ansible/tree/include_role_cache_tags_bug)
     - [Failed acceptance...](https://github.com/ansible/ansible/pull/35164)
 - `include_role` should honour allow_duplicates: <br/>
     · [devel](https://github.com/corpusops/ansible/tree/include_role_honour_allow_duplicates_devel)
+    · [2.10](https://github.com/corpusops/ansible/tree/include_role_honour_allow_duplicates_210)
     · [2.9](https://github.com/corpusops/ansible/tree/include_role_honour_allow_duplicates_29)
     · [2.7](https://github.com/corpusops/ansible/tree/include_role_honour_allow_duplicates_27)
     · [2.4](https://github.com/corpusops/ansible/tree/include_role_honour_allow_duplicates)
